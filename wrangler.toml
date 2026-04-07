@@ -1,0 +1,18 @@
+name = "tractomulas-gastos"
+main = "worker.js"
+compatibility_date = "2025-01-01"
+
+[vars]
+ENVIRONMENT = "production"
+
+[[d1_databases]]
+binding  = "DB"
+database_name = "tractomulas-gastos"
+database_id   = "549d0f50-7678-4b55-b9e1-253b315e6dcc"
+
+[[r2_buckets]]
+binding     = "BUCKET"
+bucket_name = "tractomulas-soportes"
+
+[dev]
+port = 8788

@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Flota · Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:ital,wght@0,300;0,600;1,300&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#0d0e0f;--surface:#141517;--border:#222427;
+    --accent:#a0d0f0;--accent2:#f0d0a0;--warn:#f0b0a0;--green:#b8f0a0;
+    --text:#e8ebee;--muted:#6b7580;
+    --mono:'DM Mono',monospace;--serif:'Fraunces',serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:var(--mono);font-size:13px;min-height:100vh;overflow-x:hidden}
+
+  .app{display:grid;grid-template-columns:200px 1fr;grid-template-rows:56px 1fr;min-height:100vh}
+  @media(max-width:768px){.app{grid-template-columns:1fr;grid-template-rows:56px auto 1fr}.sidebar{flex-direction:row;overflow-x:auto;border-right:none;border-bottom:1px solid var(--border);padding:8px 12px!important;gap:6px!important}.nav-item{white-space:nowrap;font-size:11px;padding:4px 10px!important}}}
+
+  header{grid-column:1/-1;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;gap:14px;background:var(--surface)}
+  .logo{font-family:var(--serif);font-size:18px;font-weight:300;color:var(--accent)}
+  .logo span{color:var(--muted);font-style:italic}
+  .header-total{margin-left:auto;font-size:11px;color:var(--muted)}
+  .header-total strong{color:var(--green);font-size:15px;display:block}
+
+  .sidebar{display:flex;flex-direction:column;border-right:1px solid var(--border);background:var(--surface);padding:12px;gap:4px;overflow-y:auto}
+  .nav-section{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;padding:10px 10px 4px;margin-top:4px}
+  .nav-item{padding:7px 10px;border-radius:4px;cursor:pointer;font-size:12px;color:var(--muted);display:flex;align-items:center;gap:8px;transition:all .15s}
+  .nav-item:hover{background:var(--border);color:var(--text)}
+  .nav-item.active{background:#1a2a3a;color:var(--accent)}
+  .nav-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+  .nav-val{margin-left:auto;font-size:10px}
+
+  main{display:flex;flex-direction:column;overflow:hidden}
+
+  .toolbar{display:flex;gap:10px;padding:12px 20px;border-bottom:1px solid var(--border);align-items:center;flex-wrap:wrap}
+  .tab{padding:5px 12px;border-radius:4px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:var(--mono);font-size:11px}
+  .tab.active{border-color:var(--accent);color:var(--accent);background:#1a2a3a22}
+  .search{flex:1;min-width:120px;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:6px 12px;color:var(--text);font-family:var(--mono);font-size:12px}
+  .search:focus{outline:none;border-color:var(--accent)}
+  .btn{padding:6px 14px;border-radius:4px;border:none;cursor:pointer;font-family:var(--mono);font-size:11px;font-weight:500;transition:all .15s}
+  .btn-export{background:var(--border);color:var(--muted)}
+  .btn-export:hover{color:var(--text)}
+
+  .stats{display:flex;gap:20px;padding:12px 20px;border-bottom:1px solid var(--border);font-size:11px;color:var(--muted);flex-wrap:wrap}
+  .stat strong{color:var(--text);display:block;font-size:14px;margin-top:2px}
+  .stat.accent strong{color:var(--green)}
+
+  .veh-pills{display:flex;gap:6px;padding:10px 20px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+  .veh-pill{padding:5px 12px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:var(--mono);font-size:11px;transition:all .15s}
+  .veh-pill.active{border-color:var(--accent);color:var(--accent);background:#1a2a3a22}
+  .veh-pill .veh-total{font-size:10px;margin-left:6px;color:var(--muted)}
+
+  .table-wrap{flex:1;overflow:auto;padding:0 20px 20px}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  thead{position:sticky;top:0;background:var(--bg);z-index:1}
+  th{text-align:left;padding:10px 8px;color:var(--muted);font-weight:400;border-bottom:1px solid var(--border);font-size:11px}
+  td{padding:8px;border-bottom:1px solid var(--border);vertical-align:middle}
+  tr:hover{background:#1a2a3a11}
+  tr.nc{opacity:.7}
+  .num{color:var(--muted);font-size:11px}
+  .fecha{color:var(--muted)}
+  .veh-tag{background:#1a2a3a;color:var(--accent);padding:2px 6px;border-radius:3px;font-size:10px}
+  .concepto{max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .cat span{padding:2px 8px;border-radius:3px;font-size:10px}
+  .total{text-align:right;font-weight:500}
+  .pos{color:var(--text)}.neg{color:var(--warn)}
+  .empty{text-align:center;padding:60px 20px;color:var(--muted)}
+  .empty-icon{font-size:32px;margin-bottom:8px}
+
+  .preview-panel{display:none;margin:16px 20px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px}
+  .preview-panel.show{display:block}
+  .preview-header{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+  .preview-title{font-family:var(--serif);font-size:16px;font-weight:300}
+  .badge{display:inline-block;padding:3px 8px;border-radius:3px;font-size:10px;font-weight:500}
+  .badge-ok{background:#1a3a1a;color:var(--green)}
+  .badge-warn{background:#3a2a1a;color:var(--warn)}
+  .badge-dup{background:#3a3a1a;color:var(--accent2)}
+  .preview-body{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:14px}
+  .field-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px}
+  .field-input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:6px 10px;color:var(--text);font-family:var(--mono);font-size:12px}
+  .field-input:focus{outline:none;border-color:var(--accent)}
+  .field-value.big{font-size:22px;font-weight:500;color:var(--green)}
+  .field-value.big.neg{color:var(--warn)}
+  .preview-field.full{grid-column:1/-1}
+  .preview-footer{display:flex;gap:10px}
+  .btn-primary{padding:9px 18px;background:var(--accent);color:#0d1a0d;border-radius:4px;border:none;cursor:pointer;font-family:var(--mono);font-size:12px;font-weight:500}
+  .btn-primary:disabled{opacity:.4;cursor:not-allowed}
+  .btn-ghost{padding:9px 18px;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:12px}
+  .btn-danger{padding:9px 18px;background:#3a1a1a;color:var(--warn);border:1px solid #5a2a2a;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:12px}
+
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 20px;font-size:12px;z-index:200;transition:transform .3s ease;display:flex;align-items:center;gap:8px}
+  .toast.show{transform:translateX(-50%) translateY(0)}
+  .toast.ok{border-color:var(--green)}.toast.err{border-color:var(--warn)}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="logo">Flota <span>dashboard</span></div>
+    <div class="header-total"><span>Total período</span><strong id="header-total">$0</strong></div>
+  </header>
+
+  <div class="sidebar">
+    <div class="nav-section">Categorías</div>
+    <div id="cat-nav"></div>
+  </div>
+
+  <main>
+    <!-- Vehicle pills -->
+    <div class="veh-pills">
+      <button class="veh-pill active" onclick="filtrarVeh(null)">Todos</button>
+      <button class="veh-pill" onclick="filtrarVeh('STT115')" id="pill-STT115">STT 115 <span class="veh-total" id="vt-STT115"></span></button>
+      <button class="veh-pill" onclick="filtrarVeh('STT121')" id="pill-STT121">STT 121 <span class="veh-total" id="vt-STT121"></span></button>
+      <button class="veh-pill" onclick="filtrarVeh('UPO007')" id="pill-UPO007">UPO 007 <span class="veh-total" id="vt-UPO007"></span></button>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="toolbar">
+      <button class="tab active" onclick="filtrarPeriodo('mes')">Mes</button>
+      <button class="tab" onclick="filtrarPeriodo('2026')">2026</button>
+      <button class="tab" onclick="filtrarPeriodo('todo')">Todo</button>
+      <input class="search" type="text" placeholder="Buscar proveedor, concepto..." oninput="buscar(this.value)">
+      <button class="btn btn-export" onclick="exportarCSV()">CSV</button>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats">
+      <div class="stat"><span>Registros</span><strong id="stat-count">0</strong></div>
+      <div class="stat accent"><span>Total</span><strong id="stat-total">$0</strong></div>
+      <div class="stat"><span>IVA</span><strong id="stat-iva">$0</strong></div>
+      <div class="stat"><span>Combustible</span><strong id="stat-comb">$0</strong></div>
+      <div class="stat"><span>Peajes</span><strong id="stat-peajes">$0</strong></div>
+    </div>
+
+    <!-- Preview panel -->
+    <div class="preview-panel" id="preview-panel">
+      <div class="preview-header">
+        <span class="preview-title" id="prev-titulo">—</span>
+        <span class="badge badge-ok" id="prev-badge">—</span>
+        <span style="margin-left:auto;font-size:11px;color:var(--muted)" id="prev-confianza"></span>
+      </div>
+      <div class="preview-body">
+        <div class="preview-field"><div class="field-label">Total</div><div class="field-value big" id="prev-total">—</div></div>
+        <div class="preview-field"><div class="field-label">Vehículo</div><select class="field-input" id="prev-vehiculo"><option value="STT115">STT 115</option><option value="STT121">STT 121</option><option value="UPO007">UPO 007</option></select></div>
+        <div class="preview-field"><div class="field-label">Fecha</div><input class="field-input" type="date" id="prev-fecha"></div>
+        <div class="preview-field"><div class="field-label">No. Doc</div><input class="field-input" type="text" id="prev-numdoc"></div>
+        <div class="preview-field"><div class="field-label">Proveedor</div><input class="field-input" type="text" id="prev-proveedor"></div>
+        <div class="preview-field"><div class="field-label">NIT</div><input class="field-input" type="text" id="prev-nit"></div>
+        <div class="preview-field full"><div class="field-label">Concepto</div><input class="field-input" type="text" id="prev-concepto"></div>
+        <div class="preview-field"><div class="field-label">Categoría</div>
+          <select class="field-input" id="prev-categoria">
+            <option>Combustible</option><option>Peajes</option><option>Llantas</option><option>Mantenimiento</option>
+            <option>Repuestos</option><option>Aceites y lubricantes</option><option>Lavado</option><option>Parqueadero</option>
+            <option>Seguro</option><option>Impuestos</option><option>Tecnomecánica</option><option>GPS / Tecnología</option>
+            <option>Viáticos conductor</option><option>Documentos</option><option>Multas</option><option>Báscula</option>
+            <option>Cargue / Descargue</option><option>Administración</option><option>Misceláneos</option>
+          </select>
+        </div>
+        <div class="preview-field"><div class="field-label">Ruta</div><input class="field-input" type="text" id="prev-ruta"></div>
+        <div class="preview-field"><div class="field-label">Km</div><input class="field-input" type="number" id="prev-km"></div>
+        <div class="preview-field"><div class="field-label">Medio pago</div><input class="field-input" type="text" id="prev-medio"></div>
+        <div class="preview-field" id="prev-soporte-wrap" style="display:none"><div class="field-label">Soporte</div><a class="field-input" id="prev-soporte-link" href="#" target="_blank" style="color:var(--accent);text-decoration:none">📎 Ver documento</a></div>
+      </div>
+      <div class="preview-footer">
+        <button class="btn-ghost" onclick="cancelarPreview()">Cerrar</button>
+        <button class="btn-danger" id="btn-delete" onclick="borrarGasto()" style="display:none">Borrar</button>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>#</th><th>Fecha</th><th>Vehículo</th><th>Proveedor</th><th>Concepto</th>
+          <th>Categoría</th><th>IVA</th><th style="text-align:right">Total</th>
+          <th style="text-align:center">Soporte</th><th>Estado</th>
+        </tr></thead>
+        <tbody id="gastos-body">
+          <tr><td colspan="10"><div class="empty"><div class="empty-icon">🚛</div><div>Cargando...</div></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+</div>
+
+<div class="toast" id="toast"><span id="toast-icon">✓</span><span id="toast-msg"></span></div>
+
+<script>
+const WORKER_URL = 'https://tractomulas-gastos.ddropero.workers.dev';
+let gastos=[], gastosFilt=[], previewData=null;
+let periodo='mes', busquedaQ='', catActiva=null, vehActivo=null;
+
+const fmt = n => new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP',maximumFractionDigits:0}).format(n);
+const fmtFecha = s => s ? s.slice(0,10) : '—';
+
+document.addEventListener('DOMContentLoaded', () => cargarGastos());
+
+async function cargarGastos() {
+  const now = new Date();
+  let desde, hasta;
+  if (periodo==='mes') { desde=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`; hasta=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-31`; }
+  else if (periodo==='2026') { desde='2026-01-01'; hasta='2026-12-31'; }
+  else { desde='2024-01-01'; hasta='2030-12-31'; }
+
+  let url = `${WORKER_URL}/api/gastos?desde=${desde}&hasta=${hasta}`;
+  if (catActiva) url += `&categoria=${encodeURIComponent(catActiva)}`;
+  if (vehActivo) url += `&vehiculo=${encodeURIComponent(vehActivo)}`;
+
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+    gastos = data.registros || [];
+    renderStats(data);
+    renderCatNav(data.por_categoria || {});
+    renderVehTotals(data.por_vehiculo || {});
+    aplicarFiltros();
+  } catch {
+    gastos = [];
+    aplicarFiltros();
+  }
+}
+
+function aplicarFiltros() {
+  let f = [...gastos];
+  if (busquedaQ) {
+    const q = busquedaQ.toLowerCase();
+    f = f.filter(g => g.proveedor_nombre?.toLowerCase().includes(q) || g.concepto?.toLowerCase().includes(q) || g.numero_documento?.toLowerCase().includes(q) || g.vehiculo?.toLowerCase().includes(q));
+  }
+  gastosFilt = f;
+  renderTabla();
+}
+
+function renderTabla() {
+  const tbody = document.getElementById('gastos-body');
+  if (!gastosFilt.length) {
+    tbody.innerHTML = `<tr><td colspan="10"><div class="empty"><div class="empty-icon">🚛</div><div>Sin registros en este período</div></div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = gastosFilt.map(g => {
+    const isNeg = g.total < 0;
+    const catColor = getCatColor(g.categoria);
+    const soporteLink = g.archivo_r2
+      ? `<a href="${WORKER_URL}/api/soporte/${g.archivo_r2}" target="_blank" onclick="event.stopPropagation()" style="color:var(--accent);text-decoration:none" title="Ver soporte">📎</a>`
+      : '<span style="color:var(--border)">—</span>';
+    return `<tr class="${isNeg?'nc':''}" onclick="verDetalle(${g.id})" style="cursor:pointer">
+      <td class="num">${g.numero||'—'}</td>
+      <td class="fecha">${fmtFecha(g.fecha)}</td>
+      <td><span class="veh-tag">${g.vehiculo||'—'}</span></td>
+      <td>${g.proveedor_nombre||'—'}</td>
+      <td class="concepto">${g.concepto||'—'}</td>
+      <td class="cat"><span style="background:${catColor}22;color:${catColor}">${g.categoria||'—'}</span></td>
+      <td style="color:var(--muted)">${g.iva?fmt(g.iva):'—'}</td>
+      <td class="total ${isNeg?'neg':'pos'}">${fmt(g.total)}</td>
+      <td style="text-align:center">${soporteLink}</td>
+      <td><span style="background:${g.estado==='revision'?'#3a2a1a':'#1a3a1a'};color:${g.estado==='revision'?'var(--accent2)':'var(--green)'};padding:2px 6px;border-radius:3px;font-size:10px">${g.estado==='revision'?'revisión':'ok'}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+function getCatColor(c) {
+  const m={'Combustible':'#f0d0a0','Peajes':'#a0d0f0','Llantas':'#f0b0a0','Mantenimiento':'#b0c0f0','Repuestos':'#c0b0f0','Aceites y lubricantes':'#d0f0a0','Lavado':'#a0f0e0','Seguro':'#f0a0c0','Viáticos conductor':'#f0e0a0','Parqueadero':'#c0c0c0'};
+  return m[c]||'#888';
+}
+
+function renderStats(data) {
+  const regs = data.registros || [];
+  document.getElementById('stat-count').textContent = data.total_registros || 0;
+  document.getElementById('stat-total').textContent = fmt(data.gran_total || 0);
+  document.getElementById('header-total').textContent = fmt(data.gran_total || 0);
+  document.getElementById('stat-iva').textContent = fmt(regs.reduce((s,r) => s+(r.iva||0), 0));
+  document.getElementById('stat-comb').textContent = fmt((data.por_categoria||{})['Combustible']||0);
+  document.getElementById('stat-peajes').textContent = fmt((data.por_categoria||{})['Peajes']||0);
+}
+
+function renderVehTotals(por) {
+  ['STT115','STT121','UPO007'].forEach(v => {
+    const el = document.getElementById(`vt-${v}`);
+    if (el) el.textContent = por[v] ? fmt(por[v]) : '';
+  });
+}
+
+function renderCatNav(por) {
+  const cats = Object.entries(por).sort((a,b) => Math.abs(b[1])-Math.abs(a[1]));
+  const el = document.getElementById('cat-nav');
+  el.innerHTML = cats.map(([cat,val]) => {
+    const safeCat = cat.replace(/'/g, "\\'");
+    return `<div class="nav-item ${catActiva===cat?'active':''}" onclick="filtrarCat('${safeCat}')">
+      <div class="nav-dot" style="background:${getCatColor(cat)}"></div>
+      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${cat}</span>
+      <span class="nav-val">${fmt(val)}</span>
+    </div>`;
+  }).join('');
+}
+
+function filtrarPeriodo(p) {
+  periodo = p;
+  document.querySelectorAll('.tab').forEach((el,i) => el.classList.toggle('active', ['mes','2026','todo'][i]===p));
+  cargarGastos();
+}
+function filtrarCat(c) { catActiva = catActiva===c ? null : c; cargarGastos(); }
+function filtrarVeh(v) {
+  vehActivo = v;
+  document.querySelectorAll('.veh-pill').forEach(b => b.classList.remove('active'));
+  if (v) document.getElementById(`pill-${v}`).classList.add('active');
+  else document.querySelector('.veh-pill').classList.add('active');
+  cargarGastos();
+}
+function buscar(q) { busquedaQ=q; aplicarFiltros(); }
+
+function verDetalle(id) {
+  const g = gastos.find(x => x.id===id);
+  if (g) showPreview(g);
+}
+
+function showPreview(p) {
+  previewData = p;
+  document.getElementById('prev-titulo').textContent = p.proveedor_nombre || '—';
+  const totalEl = document.getElementById('prev-total');
+  totalEl.textContent = fmt(p.total);
+  totalEl.className = 'field-value big' + (p.total<0?' neg':'');
+
+  document.getElementById('prev-fecha').value = p.fecha||'';
+  document.getElementById('prev-numdoc').value = p.numero_documento||'';
+  document.getElementById('prev-proveedor').value = p.proveedor_nombre||'';
+  document.getElementById('prev-nit').value = p.proveedor_nit||'';
+  document.getElementById('prev-concepto').value = p.concepto||'';
+  document.getElementById('prev-medio').value = p.medio_pago||'';
+  document.getElementById('prev-ruta').value = p.ruta||'';
+  document.getElementById('prev-km').value = p.kilometraje||'';
+
+  const vehSel = document.getElementById('prev-vehiculo');
+  for (let opt of vehSel.options) { if (opt.value===p.vehiculo) { opt.selected=true; break; } }
+  const catSel = document.getElementById('prev-categoria');
+  for (let opt of catSel.options) { if (opt.value===p.categoria) { opt.selected=true; break; } }
+
+  const sWrap = document.getElementById('prev-soporte-wrap');
+  const sLink = document.getElementById('prev-soporte-link');
+  if (p.archivo_r2) { sWrap.style.display=''; sLink.href=`${WORKER_URL}/api/soporte/${p.archivo_r2}`; }
+  else { sWrap.style.display='none'; }
+
+  const btnDel = document.getElementById('btn-delete');
+  btnDel.style.display = p.id ? 'inline-flex' : 'none';
+
+  document.getElementById('preview-panel').classList.add('show');
+}
+
+function cancelarPreview() {
+  document.getElementById('preview-panel').classList.remove('show');
+  previewData = null;
+}
+
+async function borrarGasto() {
+  if (!previewData?.id) return;
+  if (!confirm(`Borrar registro #${previewData.numero}?\n${previewData.proveedor_nombre} — ${fmt(previewData.total)}\n\nNo se puede deshacer.`)) return;
+  const btn = document.getElementById('btn-delete');
+  btn.disabled=true; btn.textContent='Borrando...';
+  try {
+    const res = await fetch(`${WORKER_URL}/api/gastos/${previewData.id}`, {method:'DELETE'});
+    const data = await res.json();
+    if (data.ok) { showToast(`#${data.deleted} borrado`,'ok'); cancelarPreview(); cargarGastos(); }
+    else showToast('Error: '+data.error,'err');
+  } catch(e) { showToast('Error: '+e.message,'err'); }
+  btn.disabled=false; btn.textContent='Borrar';
+}
+
+function exportarCSV() {
+  const h = ['#','Fecha','Vehículo','Proveedor','NIT','Concepto','Categoría','Ruta','Km','IVA','Total','Medio Pago','Ref'];
+  const rows = gastosFilt.map(g => [g.numero,g.fecha,g.vehiculo,g.proveedor_nombre,g.proveedor_nit,`"${(g.concepto||'').replace(/"/g,'""')}"`,g.categoria,g.ruta||'',g.kilometraje||'',g.iva||0,g.total,g.medio_pago||'',g.referencia_pago||'']);
+  const csv = [h,...rows].map(r=>r.join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+  a.download = `flota_gastos_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
+
+function showToast(msg, type='ok') {
+  const t = document.getElementById('toast');
+  document.getElementById('toast-icon').textContent = type==='ok'?'✓':'✕';
+  document.getElementById('toast-msg').textContent = msg;
+  t.className = `toast show ${type}`;
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+</script>
+</body>
+</html>

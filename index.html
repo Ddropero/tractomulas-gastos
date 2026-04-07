@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Tractomulas · Gastos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:ital,wght@0,300;0,600;1,300&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:      #0d0e0f;
+    --surface: #141517;
+    --border:  #222427;
+    --accent:  #a0d0f0;
+    --accent2: #f0d0a0;
+    --warn:    #f0b0a0;
+    --green:   #b8f0a0;
+    --text:    #e8ebee;
+    --muted:   #6b7580;
+    --mono:    'DM Mono', monospace;
+    --serif:   'Fraunces', serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  header {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .logo { font-family: var(--serif); font-size: 18px; font-weight: 300; color: var(--accent); }
+  .logo span { color: var(--muted); font-style: italic; }
+
+  /* Vehicle selector */
+  .vehicle-bar {
+    display: flex;
+    gap: 8px;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .veh-btn {
+    flex: 1;
+    padding: 10px 8px;
+    background: var(--bg);
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.2s;
+  }
+  .veh-btn.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: #1a2a3a22;
+  }
+  .veh-btn .veh-placa { display: block; font-size: 15px; font-weight: 500; margin-bottom: 2px; }
+  .veh-btn .veh-icon { font-size: 20px; display: block; margin-bottom: 4px; }
+
+  /* Main */
+  .main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 20px;
+    gap: 16px;
+  }
+  .no-vehicle { color: var(--muted); font-size: 12px; text-align: center; }
+
+  .capture-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    width: 100%;
+    max-width: 400px;
+  }
+  .capture-btn {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 32px 16px;
+    background: var(--surface);
+    border: 1.5px dashed var(--border);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .capture-btn:hover, .capture-btn:active { border-color: var(--accent); background: #1a2a3a22; }
+  .capture-btn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+  .capture-icon { font-size: 36px; }
+  .capture-label { font-size: 12px; color: var(--muted); text-align: center; font-family: var(--mono); }
+  .capture-label strong { color: var(--text); display: block; margin-bottom: 2px; }
+
+  .status-area { width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 10px; }
+  .file-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px 16px; display: flex; align-items: center; gap: 12px;
+    animation: fadeIn 0.3s ease;
+  }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } }
+  .file-icon { font-size: 20px; }
+  .file-info { flex: 1; overflow: hidden; }
+  .file-name { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .file-status { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .file-status.ok { color: var(--green); }
+  .file-status.dup { color: var(--accent2); }
+  .file-status.err { color: var(--warn); }
+  .spinner-sm { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--accent2); border-top-color: transparent; animation: spin 0.6s linear infinite; flex-shrink: 0; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Overlay */
+  .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 100; overflow-y: auto; padding: 20px; }
+  .overlay.show { display: flex; flex-direction: column; align-items: center; }
+  .preview-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; width: 100%; max-width: 420px; padding: 20px; animation: fadeIn 0.3s ease; }
+  .preview-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .preview-proveedor { font-family: var(--serif); font-size: 16px; font-weight: 300; }
+  .preview-total { font-size: 22px; font-weight: 500; color: var(--green); text-align: right; }
+  .preview-total.neg { color: var(--warn); }
+  .preview-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+  .pf { display: flex; flex-direction: column; gap: 3px; }
+  .pf.full { grid-column: 1/-1; }
+  .pf label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  .pf input, .pf select { background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 7px 10px; color: var(--text); font-family: var(--mono); font-size: 12px; }
+  .pf input:focus, .pf select:focus { outline: none; border-color: var(--accent); }
+  .preview-actions { display: flex; gap: 10px; }
+  .btn { flex: 1; padding: 12px; border-radius: 6px; border: none; cursor: pointer; font-family: var(--mono); font-size: 13px; font-weight: 500; transition: all 0.15s; text-align: center; }
+  .btn-confirm { background: var(--accent); color: #0d1a0d; }
+  .btn-confirm:hover { background: #c0e0ff; }
+  .btn-confirm:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-skip { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+  .badge { display: inline-block; padding: 3px 8px; border-radius: 3px; font-size: 10px; font-weight: 500; }
+  .badge-ok { background: #1a3a1a; color: var(--green); }
+  .badge-warn { background: #3a2a1a; color: var(--warn); }
+  .badge-veh { background: #1a2a3a; color: var(--accent); margin-left: 6px; }
+
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(80px); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 20px; font-size: 12px; z-index: 200; transition: transform 0.3s ease; display: flex; align-items: center; gap: 8px; max-width: 90vw; }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+  .toast.ok { border-color: var(--green); }
+  .toast.err { border-color: var(--warn); }
+
+  .counter { text-align: center; font-size: 11px; color: var(--muted); margin-top: 8px; }
+  .counter strong { color: var(--accent); font-size: 13px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Tractomulas <span>gastos</span></div>
+</header>
+
+<!-- Vehicle selector -->
+<div class="vehicle-bar">
+  <button class="veh-btn" onclick="selectVehicle('STT115')" id="veh-STT115">
+    <span class="veh-icon">🚛</span>
+    <span class="veh-placa">STT 115</span>
+  </button>
+  <button class="veh-btn" onclick="selectVehicle('STT121')" id="veh-STT121">
+    <span class="veh-icon">🚛</span>
+    <span class="veh-placa">STT 121</span>
+  </button>
+  <button class="veh-btn" onclick="selectVehicle('UPO007')" id="veh-UPO007">
+    <span class="veh-icon">🚛</span>
+    <span class="veh-placa">UPO 007</span>
+  </button>
+</div>
+
+<div class="main">
+  <div id="capture-area" style="display:none">
+    <div class="capture-grid">
+      <div class="capture-btn" onclick="tomarFoto()">
+        <div class="capture-icon">📷</div>
+        <div class="capture-label"><strong>Tomar foto</strong>Cámara</div>
+      </div>
+      <div class="capture-btn">
+        <input type="file" accept="image/*,.pdf,application/pdf" multiple onchange="handleFiles(this.files)">
+        <div class="capture-icon">📎</div>
+        <div class="capture-label"><strong>Adjuntar</strong>Imagen o PDF</div>
+      </div>
+    </div>
+    <input type="file" id="camera-input" accept="image/*" capture="environment" style="display:none" onchange="handleFiles(this.files)">
+  </div>
+
+  <div id="no-veh" class="no-vehicle">Selecciona un vehículo arriba para comenzar</div>
+
+  <div class="status-area" id="status-area"></div>
+  <div class="counter" id="counter" style="display:none">Sesión: <strong id="counter-num">0</strong> registros</div>
+</div>
+
+<!-- Preview overlay -->
+<div class="overlay" id="overlay">
+  <div class="preview-card">
+    <div class="preview-top">
+      <div>
+        <div class="preview-proveedor" id="pv-proveedor">—</div>
+        <span class="badge badge-ok" id="pv-badge">OK</span>
+        <span class="badge badge-veh" id="pv-veh-badge">—</span>
+      </div>
+      <div class="preview-total" id="pv-total">$0</div>
+    </div>
+    <div class="preview-fields">
+      <div class="pf">
+        <label>Fecha</label>
+        <input type="date" id="pv-fecha">
+      </div>
+      <div class="pf">
+        <label>No. Documento</label>
+        <input type="text" id="pv-numdoc">
+      </div>
+      <div class="pf">
+        <label>Vehículo</label>
+        <select id="pv-vehiculo">
+          <option value="STT115">STT 115</option>
+          <option value="STT121">STT 121</option>
+          <option value="UPO007">UPO 007</option>
+        </select>
+      </div>
+      <div class="pf">
+        <label>Categoría</label>
+        <select id="pv-cat">
+          <option>Combustible</option>
+          <option>Peajes</option>
+          <option>Llantas</option>
+          <option>Mantenimiento</option>
+          <option>Repuestos</option>
+          <option>Aceites y lubricantes</option>
+          <option>Lavado</option>
+          <option>Parqueadero</option>
+          <option>Seguro</option>
+          <option>Impuestos</option>
+          <option>Tecnomecánica</option>
+          <option>GPS / Tecnología</option>
+          <option>Viáticos conductor</option>
+          <option>Documentos</option>
+          <option>Multas</option>
+          <option>Báscula</option>
+          <option>Cargue / Descargue</option>
+          <option>Administración</option>
+          <option>Misceláneos</option>
+        </select>
+      </div>
+      <div class="pf full">
+        <label>Concepto</label>
+        <input type="text" id="pv-concepto">
+      </div>
+      <div class="pf">
+        <label>Ruta</label>
+        <input type="text" id="pv-ruta" placeholder="Ej: Bogotá-Bucaramanga">
+      </div>
+      <div class="pf">
+        <label>Km</label>
+        <input type="number" id="pv-km" placeholder="Kilometraje">
+      </div>
+      <div class="pf">
+        <label>NIT</label>
+        <input type="text" id="pv-nit">
+      </div>
+      <div class="pf">
+        <label>Medio pago</label>
+        <input type="text" id="pv-medio">
+      </div>
+    </div>
+    <div class="preview-actions">
+      <button class="btn btn-skip" onclick="skipPreview()">Descartar</button>
+      <button class="btn btn-confirm" id="pv-confirm" onclick="confirmPreview()">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"><span id="toast-icon">✓</span><span id="toast-msg"></span></div>
+
+<script>
+const WORKER_URL = 'https://tractomulas-gastos.ddropero.workers.dev';
+let vehiculo = null;
+let usuario = 'david';
+let previewQueue = [];
+let currentPreview = null;
+let sessionCount = 0;
+
+const fmt = n => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(n);
+
+function tomarFoto() {
+  if (!vehiculo) return;
+  document.getElementById('camera-input').click();
+}
+
+function toast(msg, type = 'ok') {
+  const t = document.getElementById('toast');
+  document.getElementById('toast-icon').textContent = type === 'ok' ? '✓' : '✕';
+  document.getElementById('toast-msg').textContent = msg;
+  t.className = `toast show ${type}`;
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+function selectVehicle(v) {
+  vehiculo = v;
+  document.querySelectorAll('.veh-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(`veh-${v}`).classList.add('active');
+  document.getElementById('capture-area').style.display = '';
+  document.getElementById('no-veh').style.display = 'none';
+}
+
+async function handleFiles(files) {
+  if (!files.length || !vehiculo) return;
+  const fileList = Array.from(files);
+  const area = document.getElementById('status-area');
+  let duplicados = 0;
+
+  const cards = fileList.map((f, i) => {
+    const card = document.createElement('div');
+    card.className = 'file-card';
+    const shortName = f.name.length > 28 ? f.name.slice(0,25) + '...' : f.name;
+    card.innerHTML = `<div class="spinner-sm"></div><div class="file-info"><div class="file-name">${shortName}</div><div class="file-status" style="color:var(--accent2)">Procesando...</div></div>`;
+    area.prepend(card);
+    return card;
+  });
+
+  const promises = fileList.map(async (file, i) => {
+    const card = cards[i];
+    const shortName = file.name.length > 28 ? file.name.slice(0,25) + '...' : file.name;
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      form.append('usuario', usuario);
+      form.append('vehiculo', vehiculo);
+
+      const res = await fetch(`${WORKER_URL}/api/upload`, { method: 'POST', body: form });
+      const data = await res.json();
+
+      if (!data.ok) {
+        card.innerHTML = `<div class="file-icon">✕</div><div class="file-info"><div class="file-name">${shortName}</div><div class="file-status err">${data.error || 'Error'}</div></div>`;
+        return;
+      }
+      if (data.preview.es_posible_duplicado) {
+        duplicados++;
+        card.innerHTML = `<div class="file-icon">⊘</div><div class="file-info"><div class="file-name">${shortName}</div><div class="file-status dup">Duplicado — descartado</div></div>`;
+        setTimeout(() => card.remove(), 3000);
+        return;
+      }
+      card.innerHTML = `<div class="file-icon">✓</div><div class="file-info"><div class="file-name">${shortName}</div><div class="file-status ok">${data.preview.proveedor_nombre} · ${fmt(data.preview.total)}</div></div>`;
+      previewQueue.push({ preview: data.preview, card });
+    } catch (err) {
+      card.innerHTML = `<div class="file-icon">✕</div><div class="file-info"><div class="file-name">${shortName}</div><div class="file-status err">Error de conexión</div></div>`;
+    }
+  });
+
+  await Promise.all(promises);
+  if (duplicados > 0) toast(`${duplicados} duplicado${duplicados > 1 ? 's' : ''} descartado${duplicados > 1 ? 's' : ''}`, 'err');
+  showNext();
+  document.querySelectorAll('input[type=file]').forEach(i => i.value = '');
+}
+
+function showNext() {
+  if (!previewQueue.length) return;
+  const { preview, card } = previewQueue.shift();
+  currentPreview = { preview, card };
+  const p = preview;
+
+  document.getElementById('pv-proveedor').textContent = p.proveedor_nombre || '—';
+  const totalEl = document.getElementById('pv-total');
+  totalEl.textContent = fmt(p.total);
+  totalEl.className = 'preview-total' + (p.total < 0 ? ' neg' : '');
+
+  document.getElementById('pv-fecha').value = p.fecha || '';
+  document.getElementById('pv-numdoc').value = p.numero_documento || '';
+  document.getElementById('pv-nit').value = p.proveedor_nit || '';
+  document.getElementById('pv-concepto').value = p.concepto || '';
+  document.getElementById('pv-medio').value = p.medio_pago || '';
+  document.getElementById('pv-ruta').value = p.ruta || '';
+  document.getElementById('pv-km').value = p.kilometraje || '';
+
+  // Vehículo: usar el seleccionado o el detectado
+  const vehSel = document.getElementById('pv-vehiculo');
+  const vehVal = p.vehiculo || vehiculo;
+  for (let opt of vehSel.options) { if (opt.value === vehVal) { opt.selected = true; break; } }
+  document.getElementById('pv-veh-badge').textContent = vehVal || '—';
+
+  const catSel = document.getElementById('pv-cat');
+  for (let opt of catSel.options) { if (opt.value === p.categoria) { opt.selected = true; break; } }
+
+  const badge = document.getElementById('pv-badge');
+  badge.textContent = p.estado === 'revision' ? 'Revisar' : 'OK';
+  badge.className = p.estado === 'revision' ? 'badge badge-warn' : 'badge badge-ok';
+
+  const qLen = previewQueue.length;
+  document.getElementById('pv-confirm').textContent = qLen > 0 ? `Confirmar (${qLen} más)` : 'Confirmar';
+  document.getElementById('overlay').classList.add('show');
+}
+
+async function confirmPreview() {
+  if (!currentPreview) return;
+  const btn = document.getElementById('pv-confirm');
+  btn.disabled = true;
+  btn.textContent = 'Guardando...';
+
+  const p = currentPreview.preview;
+  const body = {
+    ...p,
+    fecha:            document.getElementById('pv-fecha').value,
+    numero_documento: document.getElementById('pv-numdoc').value,
+    proveedor_nit:    document.getElementById('pv-nit').value,
+    concepto:         document.getElementById('pv-concepto').value,
+    categoria:        document.getElementById('pv-cat').value,
+    vehiculo:         document.getElementById('pv-vehiculo').value,
+    ruta:             document.getElementById('pv-ruta').value || null,
+    kilometraje:      parseInt(document.getElementById('pv-km').value) || null,
+    medio_pago:       document.getElementById('pv-medio').value,
+    usuario
+  };
+
+  try {
+    const res = await fetch(`${WORKER_URL}/api/confirm`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (data.ok) {
+      toast(`#${data.numero} guardado — ${body.vehiculo}`);
+      sessionCount++;
+      document.getElementById('counter').style.display = '';
+      document.getElementById('counter-num').textContent = sessionCount;
+      if (currentPreview.card) {
+        const st = currentPreview.card.querySelector('.file-status');
+        if (st) { st.textContent = `Guardado #${data.numero}`; st.className = 'file-status ok'; }
+      }
+    } else {
+      toast(data.error || 'Error', 'err');
+    }
+  } catch (err) {
+    toast('Error: ' + err.message, 'err');
+  }
+  btn.disabled = false;
+  closeAndNext();
+}
+
+function skipPreview() {
+  if (currentPreview?.card) {
+    const st = currentPreview.card.querySelector('.file-status');
+    if (st) { st.textContent = 'Descartado'; st.className = 'file-status dup'; }
+  }
+  closeAndNext();
+}
+
+function closeAndNext() {
+  document.getElementById('overlay').classList.remove('show');
+  currentPreview = null;
+  setTimeout(() => showNext(), 300);
+}
+</script>
+</body>
+</html>

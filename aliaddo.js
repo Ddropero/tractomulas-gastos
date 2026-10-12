@@ -274,7 +274,12 @@ export async function facturarViajeAliaddo(token, viaje, opts = {}) {
     ok: true, invoice_id: d.id || null, numero, cufe: d.cufe || null,
     state_dian: d.stateDian || null, status_dian: d.statusDian || null,
     motivo_dian: Array.isArray(d.stateDianReason) ? d.stateDianReason.join('; ') : (d.stateDianReason || null),
-    url_pdf: d.urlPdf || null, raw: d,
+    url_pdf: d.urlPdf || null, url_zip: d.urlZip || null,
+    // Para enviar la factura al cliente (correos registrados en Aliaddo o el del cliente recién creado)
+    cliente_nombre: (persona && (persona.name || persona.companyName || persona.tradeName)) || viaje.empresa_carga || '',
+    cliente_emails: persona ? emailsDe(persona) : (opts.clienteEmail ? [String(opts.clienteEmail).trim()] : []),
+    total: valor, vence: dueDate,
+    raw: d,
   };
 }
 
@@ -297,11 +302,10 @@ export async function facturaManualAliaddo(token, datos = {}, opts = {}) {
   });
 }
 
-// Envío de la factura al cliente por correo. Aliaddo NO lo hace al crear la factura por API,
-// y la API pública /v1 no documenta envío: se usa la ruta de la web (PATCH /invoices/sendEmails?replyTo=…, body [ids]).
-// Aliaddo envía a los correos registrados en el contacto del cliente.
-// Rutas candidatas en orden; solo se pasa a la siguiente si la anterior NO existe o NO acepta el token
-// (401/403/404/405), así un envío nunca se hace dos veces.
+// Aliaddo NO envía la factura al cliente cuando se crea por API, y el token de API no puede pedírselo:
+// /v1 no tiene envío (404) y la ruta de la web (PATCH /invoices/sendEmails?replyTo=…) responde 401 al token.
+// Por eso el envío al cliente lo hace el worker (factura-email.js). Esta prueba sin efectos queda para
+// detectar si Aliaddo algún día habilita el envío para el token.
 const SEND_EMAIL_URLS = [BASE + '/invoices/sendEmails', 'https://app.aliaddo.net/invoices/sendEmails'];
 
 async function aliPatchUrl(token, url, body) {
@@ -321,25 +325,20 @@ async function aliPatchUrl(token, url, body) {
 // La ruta EXIGE ?replyTo= (sin él Aliaddo responde 405 "no admite PATCH")
 const REPLY_TO_DEFAULT = 'ddropero@gmail.com';
 
-export async function enviarFacturaEmailAliaddo(token, invoiceId, replyTo) {
-  if (!invoiceId) return { ok: false, error: 'Sin id de factura para enviar por correo' };
-  const qs = '?replyTo=' + encodeURIComponent(replyTo || REPLY_TO_DEFAULT);
-  const intentos = [];
-  for (const u of SEND_EMAIL_URLS) {
-    const r = await aliPatchUrl(token, u + qs, [invoiceId]);
-    intentos.push({ ruta: u.replace('https://app.aliaddo.net', ''), status: r.status });
-    if (r.ok) {
-      // La web recibe de vuelta la lista de ids enviados; si no viene el nuestro, no se da por enviado
-      if (Array.isArray(r.data) && !r.data.map(String).includes(String(invoiceId))) {
-        return { ok: false, error: 'Aliaddo respondió pero no confirmó el envío de esta factura', intentos };
-      }
-      return { ok: true, ruta: intentos[intentos.length - 1].ruta, intentos };
-    }
-    if (![401, 403, 404, 405].includes(r.status)) {
-      return { ok: false, error: `Aliaddo sendEmails ${r.status || 'sin respuesta'}: ${JSON.stringify(r.data).slice(0, 200)}`, intentos };
-    }
-  }
-  return { ok: false, error: 'Aliaddo no permitió el envío por correo con el token de la API', intentos };
+// Datos de una factura ya emitida para enviarla por correo (reenvío manual): número, cliente y sus correos
+export async function datosFacturaAliaddo(token, invoiceId) {
+  const inv = await aliGet(token, `/invoices/${encodeURIComponent(invoiceId)}`);
+  if (!inv.ok) return { error: `Aliaddo /invoices/${invoiceId} ${inv.status}` };
+  const d = (inv.data && inv.data.data && typeof inv.data.data === 'object') ? inv.data.data : (inv.data || {});
+  if (!d.personId) return { error: 'La factura no tiene cliente (personId)' };
+  const per = await aliGet(token, `/people/${encodeURIComponent(d.personId)}`);
+  const p = (per.data && per.data.data && typeof per.data.data === 'object') ? per.data.data : (per.data || {});
+  const emails = (Array.isArray(p.emails) ? p.emails : []).map(e => (e && (e.email || e)) || '').filter(Boolean);
+  return {
+    ok: true, invoice_id: d.id || invoiceId, numero: d.consecutive != null ? String(d.consecutive) : null,
+    state_dian: d.stateDian || null, cliente_nombre: d.personName || p.companyName || p.name || '',
+    cliente_emails: emails, total: Math.round(Number(d.totalAmount) || 0), vence: String(d.dueDate || '').slice(0, 10),
+  };
 }
 
 // Prueba SIN efectos: manda una lista vacía de facturas a cada ruta para ver cuál existe y acepta el token.

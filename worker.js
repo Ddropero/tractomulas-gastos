@@ -7,7 +7,8 @@
 import { runOcrAgent } from './agent-router.js';
 import { runManifiestoAgent } from './agent-manifiesto.js';
 import { generarReporteContadora } from './export-contadora.js';
-import { facturarViajeAliaddo, facturaManualAliaddo, enviarFacturaEmailAliaddo, probarEnvioEmailAliaddo, aliaddoDiagnostico, diagnosticoFacturacionAliaddo, listarClientesAliaddo, generarSoporteGasto, listarCuentasAliaddo, listarComprobantesAliaddo } from './aliaddo.js';
+import { enviarFacturaCliente, correosValidos } from './factura-email.js';
+import { facturarViajeAliaddo, facturaManualAliaddo, datosFacturaAliaddo, probarEnvioEmailAliaddo, aliaddoDiagnostico, diagnosticoFacturacionAliaddo, listarClientesAliaddo, generarSoporteGasto, listarCuentasAliaddo, listarComprobantesAliaddo } from './aliaddo.js';
 import { checkRecurrentes } from './recurrentes.js';
 import { generateReport } from './report-pdf.js';
 import {
@@ -77,15 +78,56 @@ function formatCOP(value) {
   return Math.round(Math.abs(value)).toLocaleString('es-CO');
 }
 
-// ── Envío automático de la factura emitida al correo del cliente (Aliaddo no lo hace por API) ──
-// Se apaga con ALIADDO_AUTO_EMAIL=false. Nunca lanza: devuelve {ok, error?} o null si está apagado.
-async function enviarEmailFactura(env, token, invoiceId) {
-  if (String(env.ALIADDO_AUTO_EMAIL || '').toLowerCase() === 'false' || !invoiceId) return null;
+// ── Envío de la factura emitida al correo del cliente (formato DIAN, vía Resend; ver factura-email.js) ──
+// f = { invoice_id, numero, url_zip?, url_pdf?, cliente_nombre, cliente_emails[], total?, vence? }
+// modo.auto   → envío automático al emitir (se apaga con ALIADDO_AUTO_EMAIL=false)
+// modo.forzar → reenvía aunque ya figure enviado · modo.prueba → solo a ALERT_EMAIL_TO, sin registrar
+// Una factura se envía UNA vez (tabla facturas_email). Nunca lanza: devuelve {ok, ...} o null si no aplica.
+async function enviarEmailFactura(env, f, modo = {}) {
+  if (!f || !f.invoice_id) return null;
+  if (modo.auto && String(env.ALIADDO_AUTO_EMAIL || '').toLowerCase() === 'false') return null;
+  // Al cliente solo se le envía una factura que la DIAN validó
+  if (!modo.prueba && !/^valida$/i.test(String(f.state_dian || ''))) {
+    return { ok: false, error: `La DIAN no ha validado la factura ${f.numero || ''} (estado: ${f.state_dian || 'desconocido'}); no se envía al cliente.` };
+  }
+  const duenoEmail = env.ALERT_EMAIL_TO || 'david@davidduque.com';
+  const bccCfg = String(env.FACTURAS_EMAIL_BCC || '').trim();
+  const opts = {
+    resendKey: env.RESEND_API_KEY,
+    from: env.FACTURAS_EMAIL_FROM || `${env.EMISOR_NOMBRE || 'DOCE DOCENAS SAS'} <facturacion@davidduque.com>`,
+    replyTo: env.ALIADDO_REPLY_TO || 'ddropero@gmail.com',
+    bcc: modo.prueba || bccCfg.toLowerCase() === 'none' ? null : (bccCfg || duenoEmail),
+    emisorNit: env.EMISOR_NIT || '900768035-9',
+    emisorNombre: env.EMISOR_NOMBRE || 'DOCE DOCENAS SAS',
+  };
+  if (modo.prueba) opts.para = [duenoEmail];
+  const datos = { numero: f.numero, urlZip: f.url_zip, urlPdf: f.url_pdf, clienteNombre: f.cliente_nombre, emails: f.cliente_emails, total: f.total, vence: f.vence };
   try {
-    const r = await enviarFacturaEmailAliaddo(token, invoiceId, env.ALIADDO_REPLY_TO || 'ddropero@gmail.com');
-    return r.ok ? { ok: true } : { ok: false, error: r.error };
-  } catch (e) {
-    return { ok: false, error: e.message };
+    if (modo.prueba) {
+      const e = await enviarFacturaCliente(datos, opts);
+      const real = correosValidos(f.cliente_emails); // a quién le llegaría en un envío real
+      return e.ok ? { ok: true, prueba: true, para: e.para, para_real: real } : { ok: false, prueba: true, error: e.error, para_real: real };
+    }
+    await env.DB.prepare(`CREATE TABLE IF NOT EXISTS facturas_email (
+      invoice_id TEXT PRIMARY KEY, numero TEXT, para TEXT, resend_id TEXT,
+      estado TEXT NOT NULL DEFAULT 'enviando', error TEXT,
+      creado_en TEXT DEFAULT (datetime('now','-5 hours')), actualizado_en TEXT)`).run();
+    const ins = await env.DB.prepare("INSERT OR IGNORE INTO facturas_email (invoice_id, numero, estado) VALUES (?, ?, 'enviando')")
+      .bind(f.invoice_id, f.numero || null).run();
+    if (!ins.meta.changes) {
+      const prev = await env.DB.prepare('SELECT estado, para FROM facturas_email WHERE invoice_id = ?').bind(f.invoice_id).first();
+      if (prev && prev.estado === 'enviado' && !modo.forzar) return { ok: true, ya_enviado: true, para: prev.para ? prev.para.split(',') : [] };
+      if (prev && prev.estado !== 'error' && !modo.forzar) {
+        return { ok: false, error: `El envío de la factura ${f.numero || ''} está en curso o por verificar (${prev.estado}); no se reenvía para no duplicarlo.` };
+      }
+      await env.DB.prepare("UPDATE facturas_email SET estado='enviando', error=NULL, actualizado_en=datetime('now','-5 hours') WHERE invoice_id=?").bind(f.invoice_id).run();
+    }
+    const e = await enviarFacturaCliente(datos, opts);
+    await env.DB.prepare("UPDATE facturas_email SET estado=?, para=?, resend_id=?, error=?, actualizado_en=datetime('now','-5 hours') WHERE invoice_id=?")
+      .bind(e.ok ? 'enviado' : (e.indeterminado ? 'verificar' : 'error'), (e.para || []).join(',') || null, e.id || null, e.ok ? null : String(e.error).slice(0, 500), f.invoice_id).run();
+    return e.ok ? { ok: true, para: e.para } : { ok: false, error: e.error, indeterminado: !!e.indeterminado };
+  } catch (err) {
+    return { ok: false, error: err.message };
   }
 }
 
@@ -1165,10 +1207,10 @@ export default {
         ).bind(numeroGuardar, '\n' + partes.join(' · '), id).run();
 
         // Envío al cliente por correo (después de guardar la factura: si falla, la factura sigue emitida)
-        const email = await enviarEmailFactura(env, token, r.invoice_id);
+        const email = await enviarEmailFactura(env, r, { auto: true });
         if (email) {
           await env.DB.prepare("UPDATE viajes SET notas=COALESCE(notas,'')||? WHERE id=?")
-            .bind(email.ok ? ' · Correo enviado al cliente' : ` · Correo NO enviado: ${email.error}`, id).run();
+            .bind(email.ok ? ` · Correo enviado a ${(email.para || []).join(', ')}` : ` · Correo NO enviado: ${email.error}`, id).run();
         }
 
         return json({ ok: true, numero: r.numero, cufe: r.cufe, invoice_id: r.invoice_id, state_dian: r.state_dian, motivo_dian: r.motivo_dian, url_pdf: r.url_pdf, email });
@@ -1192,16 +1234,28 @@ export default {
       } catch (err) { return json({ error: err.message }, 500); }
     }
 
-    // ── POST /api/aliaddo/facturas/:invoiceId/enviar-email — reenvío manual al cliente ──
+    // ── POST /api/aliaddo/facturas/:invoiceId/enviar-email — envío/reenvío manual al cliente ──
+    // body opcional: { url_zip | url_pdf } (si no, se busca el PDF guardado de la factura manual)
+    // ?prueba=1 → solo a ALERT_EMAIL_TO (para ver el correo) · ?forzar=1 → reenvía aunque ya figure enviado
     if (request.method === 'POST' && url.pathname.match(/^\/api\/aliaddo\/facturas\/[0-9a-f-]{36}\/enviar-email$/i)) {
       try {
         const invoiceId = url.pathname.split('/')[4];
-        const r = await enviarFacturaEmailAliaddo(env.ALIADDO_API_KEY || env.aliaddo || env.ALIADDO, invoiceId, env.ALIADDO_REPLY_TO || 'ddropero@gmail.com');
-        return json(r, r.ok ? 200 : 502);
+        const body = await request.json().catch(() => ({}));
+        const d = await datosFacturaAliaddo(env.ALIADDO_API_KEY || env.aliaddo || env.ALIADDO, invoiceId);
+        if (d.error) return json(d, 502);
+        let urlZip = body.url_zip || null, urlPdf = body.url_pdf || null;
+        if (!urlZip && !urlPdf) {
+          const fm = await env.DB.prepare('SELECT url_pdf FROM facturas_manuales WHERE invoice_id = ?').bind(invoiceId).first().catch(() => null);
+          urlPdf = fm ? fm.url_pdf : null;
+        }
+        if (!urlZip && !urlPdf) return json({ error: 'No tengo la URL del ZIP de esa factura: envíala en el body como url_zip (en Aliaddo, "Exportar ZIP").' }, 400);
+        const e = await enviarEmailFactura(env, { ...d, url_zip: urlZip, url_pdf: urlPdf },
+          { forzar: url.searchParams.get('forzar') === '1', prueba: url.searchParams.get('prueba') === '1' });
+        return json(e, e && e.ok ? 200 : 502);
       } catch (err) { return json({ error: err.message }, 500); }
     }
 
-    // ── POST /api/aliaddo/facturas/copia-email — copia de facturas (ZIP oficial DIAN + PDF) al correo del dueño ──
+    // ── POST /api/aliaddo/facturas/copia-email — copia de facturas (ZIP oficial DIAN + PDF) al correo del duenoEmail ──
     // body: { facturas: [{ numero, url_zip, url_pdf, cliente? }] }. Destinatario FIJO (ALERT_EMAIL_TO) y solo
     // archivos del almacenamiento de facturas de Aliaddo: no sirve como relay a terceros.
     if (request.method === 'POST' && url.pathname === '/api/aliaddo/facturas/copia-email') {
@@ -1305,7 +1359,7 @@ export default {
         }
         await env.DB.prepare("UPDATE facturas_manuales SET estado='emitida', numero=?, cufe=?, invoice_id=?, state_dian=?, url_pdf=?, actualizado_en=datetime('now','-5 hours') WHERE op_id=?")
           .bind(r.numero || null, r.cufe || null, r.invoice_id || null, r.state_dian || null, r.url_pdf || null, opId).run();
-        const email = await enviarEmailFactura(env, token, r.invoice_id);
+        const email = await enviarEmailFactura(env, r, { auto: true });
         return json({ ok: true, numero: r.numero, cufe: r.cufe, invoice_id: r.invoice_id, state_dian: r.state_dian, motivo_dian: r.motivo_dian, url_pdf: r.url_pdf, op_id: opId, email });
       } catch (err) {
         return json({ error: err.message }, 500);

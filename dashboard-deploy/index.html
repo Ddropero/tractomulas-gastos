@@ -3852,7 +3852,8 @@ async function facturarViaje(id) {
     });
     const data = await res.json();
     if (data.ok) {
-      showToast(`✅ Factura ${data.numero || ''} emitida en Aliaddo`, 'ok');
+      const correo = data.email ? (data.email.ok ? ' y enviada al cliente por correo' : ' — ⚠️ correo NO enviado: ' + data.email.error) : '';
+      showToast(`✅ Factura ${data.numero || ''} emitida en Aliaddo${correo}`, data.email && !data.email.ok ? 'err' : 'ok');
       if (typeof cargarViajes === 'function') cargarViajes();
     } else {
       alert('No se pudo facturar:\n\n' + (data.error || 'error desconocido') + (data.payload ? '\n\nPayload enviado:\n' + JSON.stringify(data.payload, null, 2) : ''));

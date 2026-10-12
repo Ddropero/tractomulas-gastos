@@ -297,6 +297,62 @@ export async function facturaManualAliaddo(token, datos = {}, opts = {}) {
   });
 }
 
+// Envío de la factura al cliente por correo. Aliaddo NO lo hace al crear la factura por API,
+// y la API pública /v1 no documenta envío: se usa la ruta de la web (PATCH /invoices/sendEmails?replyTo=…, body [ids]).
+// Aliaddo envía a los correos registrados en el contacto del cliente.
+// Rutas candidatas en orden; solo se pasa a la siguiente si la anterior NO existe o NO acepta el token
+// (401/403/404/405), así un envío nunca se hace dos veces.
+const SEND_EMAIL_URLS = [BASE + '/invoices/sendEmails', 'https://app.aliaddo.net/invoices/sendEmails'];
+
+async function aliPatchUrl(token, url, body) {
+  let res, txt;
+  try {
+    res = await fetch(url, {
+      method: 'PATCH',
+      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    txt = await res.text();
+  } catch (e) { return { ok: false, status: 0, data: 'network:' + e.message }; }
+  let data; try { data = JSON.parse(txt); } catch { data = txt; }
+  return { ok: res.ok, status: res.status, data };
+}
+
+// La ruta EXIGE ?replyTo= (sin él Aliaddo responde 405 "no admite PATCH")
+const REPLY_TO_DEFAULT = 'ddropero@gmail.com';
+
+export async function enviarFacturaEmailAliaddo(token, invoiceId, replyTo) {
+  if (!invoiceId) return { ok: false, error: 'Sin id de factura para enviar por correo' };
+  const qs = '?replyTo=' + encodeURIComponent(replyTo || REPLY_TO_DEFAULT);
+  const intentos = [];
+  for (const u of SEND_EMAIL_URLS) {
+    const r = await aliPatchUrl(token, u + qs, [invoiceId]);
+    intentos.push({ ruta: u.replace('https://app.aliaddo.net', ''), status: r.status });
+    if (r.ok) {
+      // La web recibe de vuelta la lista de ids enviados; si no viene el nuestro, no se da por enviado
+      if (Array.isArray(r.data) && !r.data.map(String).includes(String(invoiceId))) {
+        return { ok: false, error: 'Aliaddo respondió pero no confirmó el envío de esta factura', intentos };
+      }
+      return { ok: true, ruta: intentos[intentos.length - 1].ruta, intentos };
+    }
+    if (![401, 403, 404, 405].includes(r.status)) {
+      return { ok: false, error: `Aliaddo sendEmails ${r.status || 'sin respuesta'}: ${JSON.stringify(r.data).slice(0, 200)}`, intentos };
+    }
+  }
+  return { ok: false, error: 'Aliaddo no permitió el envío por correo con el token de la API', intentos };
+}
+
+// Prueba SIN efectos: manda una lista vacía de facturas a cada ruta para ver cuál existe y acepta el token.
+// Si la ruta sirve, Aliaddo responde 400 {code:463,"¡No hay documentos para enviar!"}; 401/403 = token no aceptado.
+export async function probarEnvioEmailAliaddo(token) {
+  const out = [];
+  for (const u of SEND_EMAIL_URLS) {
+    const r = await aliPatchUrl(token, u + '?replyTo=' + encodeURIComponent(REPLY_TO_DEFAULT), []);
+    out.push({ ruta: u.replace('https://app.aliaddo.net', ''), status: r.status, respuesta: typeof r.data === 'string' ? r.data.slice(0, 160) : r.data });
+  }
+  return { ok: true, rutas: out };
+}
+
 // Construye el payload para crear un proveedor (Company si NIT de empresa, Person si CC)
 function proveedorPayload(nitBase, dv, nombre) {
   const n = nombre || '';

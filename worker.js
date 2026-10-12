@@ -7,7 +7,7 @@
 import { runOcrAgent } from './agent-router.js';
 import { runManifiestoAgent } from './agent-manifiesto.js';
 import { generarReporteContadora } from './export-contadora.js';
-import { facturarViajeAliaddo, facturaManualAliaddo, aliaddoDiagnostico, diagnosticoFacturacionAliaddo, listarClientesAliaddo, generarSoporteGasto, listarCuentasAliaddo, listarComprobantesAliaddo } from './aliaddo.js';
+import { facturarViajeAliaddo, facturaManualAliaddo, enviarFacturaEmailAliaddo, probarEnvioEmailAliaddo, aliaddoDiagnostico, diagnosticoFacturacionAliaddo, listarClientesAliaddo, generarSoporteGasto, listarCuentasAliaddo, listarComprobantesAliaddo } from './aliaddo.js';
 import { checkRecurrentes } from './recurrentes.js';
 import { generateReport } from './report-pdf.js';
 import {
@@ -75,6 +75,18 @@ async function checkDuplicate(db, numeroDocumento, total, fecha, proveedorNit, v
 function formatCOP(value) {
   if (!value && value !== 0) return '0';
   return Math.round(Math.abs(value)).toLocaleString('es-CO');
+}
+
+// ── Envío automático de la factura emitida al correo del cliente (Aliaddo no lo hace por API) ──
+// Se apaga con ALIADDO_AUTO_EMAIL=false. Nunca lanza: devuelve {ok, error?} o null si está apagado.
+async function enviarEmailFactura(env, token, invoiceId) {
+  if (String(env.ALIADDO_AUTO_EMAIL || '').toLowerCase() === 'false' || !invoiceId) return null;
+  try {
+    const r = await enviarFacturaEmailAliaddo(token, invoiceId, env.ALIADDO_REPLY_TO || 'ddropero@gmail.com');
+    return r.ok ? { ok: true } : { ok: false, error: r.error };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1152,7 +1164,14 @@ export default {
           "UPDATE viajes SET estado_factura='facturado', numero_factura=?, fecha_factura=datetime('now','-5 hours'), notas=COALESCE(notas,'')||?, actualizado_en=datetime('now') WHERE id=?"
         ).bind(numeroGuardar, '\n' + partes.join(' · '), id).run();
 
-        return json({ ok: true, numero: r.numero, cufe: r.cufe, invoice_id: r.invoice_id, state_dian: r.state_dian, motivo_dian: r.motivo_dian, url_pdf: r.url_pdf });
+        // Envío al cliente por correo (después de guardar la factura: si falla, la factura sigue emitida)
+        const email = await enviarEmailFactura(env, token, r.invoice_id);
+        if (email) {
+          await env.DB.prepare("UPDATE viajes SET notas=COALESCE(notas,'')||? WHERE id=?")
+            .bind(email.ok ? ' · Correo enviado al cliente' : ` · Correo NO enviado: ${email.error}`, id).run();
+        }
+
+        return json({ ok: true, numero: r.numero, cufe: r.cufe, invoice_id: r.invoice_id, state_dian: r.state_dian, motivo_dian: r.motivo_dian, url_pdf: r.url_pdf, email });
       } catch (err) {
         return json({ error: err.message }, 500);
       }
@@ -1163,6 +1182,71 @@ export default {
       try {
         const d = await diagnosticoFacturacionAliaddo(env.ALIADDO_API_KEY || env.aliaddo || env.ALIADDO);
         return json(d, d.error ? 400 : 200);
+      } catch (err) { return json({ error: err.message }, 500); }
+    }
+
+    // ── GET /api/aliaddo/probar-envio-email — prueba SIN efectos (lista vacía) de qué ruta de envío acepta el token ──
+    if (request.method === 'GET' && url.pathname === '/api/aliaddo/probar-envio-email') {
+      try {
+        return json(await probarEnvioEmailAliaddo(env.ALIADDO_API_KEY || env.aliaddo || env.ALIADDO));
+      } catch (err) { return json({ error: err.message }, 500); }
+    }
+
+    // ── POST /api/aliaddo/facturas/:invoiceId/enviar-email — reenvío manual al cliente ──
+    if (request.method === 'POST' && url.pathname.match(/^\/api\/aliaddo\/facturas\/[0-9a-f-]{36}\/enviar-email$/i)) {
+      try {
+        const invoiceId = url.pathname.split('/')[4];
+        const r = await enviarFacturaEmailAliaddo(env.ALIADDO_API_KEY || env.aliaddo || env.ALIADDO, invoiceId, env.ALIADDO_REPLY_TO || 'ddropero@gmail.com');
+        return json(r, r.ok ? 200 : 502);
+      } catch (err) { return json({ error: err.message }, 500); }
+    }
+
+    // ── POST /api/aliaddo/facturas/copia-email — copia de facturas (ZIP oficial DIAN + PDF) al correo del dueño ──
+    // body: { facturas: [{ numero, url_zip, url_pdf, cliente? }] }. Destinatario FIJO (ALERT_EMAIL_TO) y solo
+    // archivos del almacenamiento de facturas de Aliaddo: no sirve como relay a terceros.
+    if (request.method === 'POST' && url.pathname === '/api/aliaddo/facturas/copia-email') {
+      try {
+        if (!env.RESEND_API_KEY) return json({ error: 'Falta RESEND_API_KEY' }, 500);
+        const body = await request.json().catch(() => ({}));
+        const facturas = Array.isArray(body.facturas) ? body.facturas.slice(0, 20) : [];
+        if (!facturas.length) return json({ error: 'Sin facturas' }, 400);
+        const urlOk = (u) => /^https:\/\/storage\.googleapis\.com\/aliaddo-tenant-sales\/invoices\/\d+\/[\w.-]+\.(zip|pdf)$/.test(String(u || ''));
+        const b64 = (buf) => {
+          const bytes = new Uint8Array(buf); let s = '';
+          for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+          return btoa(s);
+        };
+        const attachments = [], faltan = [];
+        let total = 0;
+        for (const f of facturas) {
+          const num = String(f.numero || '').replace(/[^\w-]/g, '').slice(0, 20) || 'sin-numero';
+          for (const [u, ext] of [[f.url_zip, 'zip'], [f.url_pdf, 'pdf']]) {
+            if (!u) continue;
+            if (!urlOk(u)) { faltan.push(`${num}.${ext}: URL no permitida`); continue; }
+            const res = await fetch(u);
+            if (!res.ok) { faltan.push(`${num}.${ext}: HTTP ${res.status}`); continue; }
+            const buf = await res.arrayBuffer();
+            total += buf.byteLength;
+            if (total > 20 * 1024 * 1024) return json({ error: 'Los adjuntos superan 20 MB' }, 400);
+            attachments.push({ filename: `Factura_${num}.${ext}`, content: b64(buf) });
+          }
+        }
+        if (!attachments.length) return json({ error: 'No se pudo descargar ningún archivo', faltan }, 502);
+        const filas = facturas.map(f => `<li>Factura ${String(f.numero || '').replace(/[<>&]/g, '')}${f.cliente ? ' — ' + String(f.cliente).replace(/[<>&]/g, '') : ''}</li>`).join('');
+        const send = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${env.RESEND_API_KEY}` },
+          body: JSON.stringify({
+            from: env.ALERT_EMAIL_FROM || 'Flota Alertas <alertas@davidduque.com>',
+            to: [env.ALERT_EMAIL_TO || 'david@davidduque.com'],
+            subject: `Copia facturas DOCE DOCENAS SAS — ${facturas.map(f => f.numero).join(', ')}`,
+            html: `<p>Copia de las facturas electrónicas emitidas (ZIP oficial DIAN con XML + PDF, y el PDF aparte):</p><ul>${filas}</ul>`,
+            attachments,
+          }),
+        });
+        const out = await send.json().catch(() => ({}));
+        if (!send.ok) return json({ error: `Resend ${send.status}: ${JSON.stringify(out).slice(0, 300)}`, faltan }, 502);
+        return json({ ok: true, id: out.id || null, adjuntos: attachments.map(a => a.filename), bytes: total, faltan });
       } catch (err) { return json({ error: err.message }, 500); }
     }
 
@@ -1211,7 +1295,8 @@ export default {
         }
         await env.DB.prepare("UPDATE facturas_manuales SET estado='emitida', numero=?, cufe=?, invoice_id=?, state_dian=?, url_pdf=?, actualizado_en=datetime('now','-5 hours') WHERE op_id=?")
           .bind(r.numero || null, r.cufe || null, r.invoice_id || null, r.state_dian || null, r.url_pdf || null, opId).run();
-        return json({ ok: true, numero: r.numero, cufe: r.cufe, invoice_id: r.invoice_id, state_dian: r.state_dian, motivo_dian: r.motivo_dian, url_pdf: r.url_pdf, op_id: opId });
+        const email = await enviarEmailFactura(env, token, r.invoice_id);
+        return json({ ok: true, numero: r.numero, cufe: r.cufe, invoice_id: r.invoice_id, state_dian: r.state_dian, motivo_dian: r.motivo_dian, url_pdf: r.url_pdf, op_id: opId, email });
       } catch (err) {
         return json({ error: err.message }, 500);
       }

@@ -142,7 +142,8 @@ export async function enviarFacturaCliente(datos, opts = {}) {
     attachments: [{ filename: zipUrl.split('/').pop(), content: b64(buf) }],
   };
   if (opts.replyTo) body.reply_to = opts.replyTo;
-  const bcc = correosValidos(opts.bcc ? [opts.bcc] : []).filter(c => !para.includes(c));
+  // Copia oculta: uno o varios correos (lista o texto separado por comas)
+  const bcc = correosValidos(Array.isArray(opts.bcc) ? opts.bcc : String(opts.bcc || '').split(/[,;\s]+/)).filter(c => !para.includes(c));
   if (bcc.length) body.bcc = bcc;
 
   let r;

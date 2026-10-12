@@ -10,6 +10,8 @@ FRONTEND_URL = "https://flota.davidduque.com"
 OCR_PROVIDER = "hybrid"
 EMISOR_NOMBRE = "DOCE DOCENAS SAS"
 EMISOR_NIT = "900768035-9"
+# Copia oculta de cada factura enviada al cliente (separados por coma; "none" = sin copia)
+FACTURAS_EMAIL_BCC = "david@davidduque.com,cepeanco@gmail.com"
 
 [[d1_databases]]
 binding  = "DB"

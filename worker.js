@@ -1216,6 +1216,14 @@ export default {
           for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
           return btoa(s);
         };
+        // El bucket no es público: Aliaddo entrega una URL firmada temporal (la misma que usa "Exportar ZIP" en la web)
+        const firmada = async (u) => {
+          const r = await fetch('https://app.aliaddo.net/attachments/signUrl?url=' + encodeURIComponent(u) + '&redirect=false');
+          if (!r.ok) return null;
+          const t = await r.text();
+          let s; try { s = JSON.parse(t); } catch { s = t.trim(); }
+          return typeof s === 'string' && s.startsWith('https://storage.googleapis.com/aliaddo-tenant-sales/') ? s : null;
+        };
         const attachments = [], faltan = [];
         let total = 0;
         for (const f of facturas) {
@@ -1223,7 +1231,9 @@ export default {
           for (const [u, ext] of [[f.url_zip, 'zip'], [f.url_pdf, 'pdf']]) {
             if (!u) continue;
             if (!urlOk(u)) { faltan.push(`${num}.${ext}: URL no permitida`); continue; }
-            const res = await fetch(u);
+            const s = await firmada(u);
+            if (!s) { faltan.push(`${num}.${ext}: Aliaddo no dio URL firmada`); continue; }
+            const res = await fetch(s);
             if (!res.ok) { faltan.push(`${num}.${ext}: HTTP ${res.status}`); continue; }
             const buf = await res.arrayBuffer();
             total += buf.byteLength;

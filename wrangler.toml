@@ -4,6 +4,12 @@ compatibility_date = "2025-01-01"
 
 [vars]
 ENVIRONMENT = "production"
+ALERT_EMAIL_TO = "david@davidduque.com"
+ALERT_EMAIL_FROM = "Flota Alertas <alertas@davidduque.com>"
+FRONTEND_URL = "https://flota.davidduque.com"
+OCR_PROVIDER = "hybrid"
+EMISOR_NOMBRE = "DOCE DOCENAS SAS"
+EMISOR_NIT = "900768035-9"
 
 [[d1_databases]]
 binding  = "DB"
@@ -13,6 +19,10 @@ database_id   = "549d0f50-7678-4b55-b9e1-253b315e6dcc"
 [[r2_buckets]]
 binding     = "BUCKET"
 bucket_name = "tractomulas-soportes"
+
+# Cron: alertas diarias + auto-heal telegram (7am Colombia = 12:00 UTC)
+[triggers]
+crons = ["0 12 * * *"]
 
 [dev]
 port = 8788

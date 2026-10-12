@@ -1,6 +1,6 @@
 -- ============================================================
 -- Tractomulas Gastos - D1 Schema
--- Vehículos: STT 115, STT 121, UPO 007
+-- Vehículos: STT 115, STT 121, UPO 707
 -- ============================================================
 
 -- Vehículos
@@ -75,7 +75,7 @@ CREATE INDEX IF NOT EXISTS idx_gastos_numero_doc ON gastos(numero_documento);
 INSERT OR IGNORE INTO vehiculos (placa, nombre) VALUES
   ('STT115', 'STT 115'),
   ('STT121', 'STT 121'),
-  ('UPO007', 'UPO 007');
+  ('UPO707', 'UPO 707');
 
 -- ============================================================
 -- Datos iniciales — categorías

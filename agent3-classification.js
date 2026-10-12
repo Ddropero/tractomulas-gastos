@@ -4,7 +4,7 @@
 // ============================================================
 
 export const AGENT3_SYSTEM = `Eres el clasificador de gastos de una flota de tractomulas en Colombia.
-Vehículos: STT 115, STT 121, UPO 007.
+Vehículos: STT 115, STT 121, UPO 707.
 
 Tu ÚNICA tarea: leer el documento y determinar categoría, concepto y si se puede identificar el vehículo.
 No extraigas montos. No valides NITs. Solo clasifica.
@@ -36,7 +36,7 @@ REGLAS DE CLASIFICACIÓN:
 VEHÍCULO:
 - Si el documento menciona placa STT-115, STT115, STT 115 → "STT115"
 - Si menciona STT-121, STT121, STT 121 → "STT121"
-- Si menciona UPO-007, UPO007, UPO 007 → "UPO007"
+- Si menciona UPO-707, UPO707, UPO 707 → "UPO707"
 - Si no se puede identificar → null`;
 
 export const AGENT3_PROMPT = `Clasifica este gasto de tractomula:
@@ -44,7 +44,7 @@ export const AGENT3_PROMPT = `Clasifica este gasto de tractomula:
 {
   "categoria": "una de las categorías válidas exactas",
   "concepto": "descripción concisa máx 80 chars",
-  "vehiculo_detectado": "STT115 | STT121 | UPO007 | null",
+  "vehiculo_detectado": "STT115 | STT121 | UPO707 | null",
   "ruta": "origen-destino si se identifica o null (ej: Bogotá-Bucaramanga)",
   "kilometraje": null,
   "es_gasto_ruta": true,

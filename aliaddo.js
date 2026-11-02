@@ -20,7 +20,8 @@ async function aliPost(token, path, body) {
     res = await fetch(BASE + path, {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify(body)
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(30000)
     });
     txt = await res.text();
   } catch (e) { return { ok: false, status: 0, data: 'network:' + e.message }; }
@@ -300,6 +301,149 @@ export async function facturaManualAliaddo(token, datos = {}, opts = {}) {
     purchaseOrderNumber: datos.orden_compra || null,
     paymentMeanCode: datos.medio_pago || opts.paymentMeanCode,
   });
+}
+
+// DOCUMENTO SOPORTE (compra a persona no obligada a facturar) a un proveedor ya identificado por cédula.
+// Mismo núcleo seguro que la factura: proveedor por identificación EXACTA (nunca "el primero de la lista"), nombre
+// verificado, sucursal validada, ítem por CÓDIGO (POST /v1/bills usa itemCode + unitValueBeforeTax, no itemId/price),
+// fecha de emisión = HOY (Bogotá) y la fecha de la operación en la observación. Un POST nunca se reintenta solo.
+// datos = { cedula, nombre, valor (entero), concepto, fecha_operacion, item_code }
+// Devuelve estado 'emitido' (DIAN válida, total y folio esperados) o 'verificar' + detener:true (algo no cuadra: parar el lote).
+const DS_FOLIO_MIN = 1501, DS_FOLIO_MAX = 3000; // resolución de documento soporte 18764100291128
+export async function documentoSoporteManualAliaddo(token, datos = {}, opts = {}) {
+  if (!token) return { error: 'Token de Aliaddo no configurado en el worker' };
+  const dry = !!opts.dryRun;
+  const cedula = soloDig(datos.cedula);
+  if (!/^\d{5,10}$/.test(cedula) || String(datos.cedula).trim() !== cedula) return { error: `Cédula/NIT inválido: "${datos.cedula || ''}" (solo dígitos, sin DV)`, motivo: 'cedula_invalida' };
+  const nombre = String(datos.nombre || '').trim();
+  if (nombre.length < 5) return { error: 'Falta el nombre del proveedor', motivo: 'sin_nombre' };
+  if (typeof datos.valor !== 'number' || !Number.isInteger(datos.valor) || datos.valor <= 0) return { error: `El valor debe ser un número entero mayor que 0 (llegó ${JSON.stringify(datos.valor)})`, motivo: 'valor_invalido' };
+  const valor = datos.valor;
+  if (valor > 2000000 && !datos.confirmar_alto) return { error: `Valor ${valor} superior a $2.000.000: confirma con confirmar_alto:true`, motivo: 'valor_alto' };
+  const concepto = String(datos.concepto || '').trim();
+  if (!concepto) return { error: 'Falta el concepto del documento soporte', motivo: 'sin_concepto' };
+  const oper = String(datos.fecha_operacion || '').slice(0, 10);
+  const hoy0 = opts.hoy || hoyBogota();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(oper) || oper > hoy0) return { error: `fecha_operacion inválida o futura: "${datos.fecha_operacion || ''}"`, motivo: 'fecha_operacion_invalida' };
+  if (esLaEmisora(nombre, cedula, opts.emisorNit)) return { error: 'El proveedor es la propia empresa emisora', motivo: 'proveedor_es_emisor' };
+
+  // 1. Proveedor: identificación exacta y nombre coherente (evita emitir a otra persona por una cédula mal escrita)
+  const cli = await aliGet(token, `/people?identification=${encodeURIComponent(cedula)}&itemsPerPage=10`);
+  if (cli.status === 401) return { error: 'Token inválido (401). Revisa el token de Aliaddo.' };
+  if (!cli.ok) return { error: `Aliaddo /people ${cli.status}: ${JSON.stringify(cli.data).slice(0, 200)}` };
+  const persona = listOf(cli.data).find(p => soloDig(p && p.identification) === cedula);
+  if (!persona) {
+    return { error: `El proveedor con cédula ${cedula} ("${nombre}") no existe en Aliaddo. Créalo allí (como proveedor) o avísame para crearlo.`, motivo: 'proveedor_no_existe', proveedor: { existe: false, cedula, nombre } };
+  }
+  const nombreAli = String(persona.name || persona.companyName || persona.tradeName || [persona.firstName, persona.secondName, persona.firstSurname, persona.secondSurname].filter(Boolean).join(' ') || '');
+  const toks = s => new Set(String(s).toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/Ñ/g, 'N').split(/[^A-Z]+/).filter(w => w.length >= 4));
+  const tA = toks(nombre), tB = toks(nombreAli);
+  const comunes = [...tA].filter(w => tB.has(w)).length;
+  if (comunes === 0 || comunes < Math.min(3, tA.size, tB.size)) {
+    return { error: `La cédula ${cedula} en Aliaddo es de "${nombreAli}", que no coincide con "${nombre}". No se emite.`, motivo: 'nombre_no_coincide', proveedor: { existe: true, id: idOf(persona), nombre: nombreAli, cedula } };
+  }
+  const personId = idOf(persona);
+  const proveedor = { existe: true, id: personId, nombre: nombreAli, identificacion: persona.identification };
+
+  // 2. Sucursal validada (la que tiene resolución DIAN)
+  const pref = opts.branchId || SUCURSAL_FACTURACION;
+  const br = await aliGet(token, '/branches?itemsPerPage=10');
+  if (!br.ok) return { error: `Aliaddo /branches ${br.status}` };
+  const branch = listOf(br.data).find(b => idOf(b) === pref);
+  if (!branch) return { error: `La sucursal ${pref} no existe en Aliaddo.` };
+  const branchId = idOf(branch);
+
+  // 3. Ítem(s) por código: una sola línea (item_code) o varias (lineas = [{item_code, valor, descripcion}]) que suman el valor del recibo
+  const it = await aliGet(token, '/items?itemsPerPage=50');
+  if (!it.ok) return { error: `Aliaddo /items ${it.status}` };
+  const items = listOf(it.data);
+  const catalogo = items.map(x => ({ code: x.code, nombre: x.name }));
+  let lineas;
+  if (datos.lineas != null) {
+    if (!Array.isArray(datos.lineas) || datos.lineas.length < 1 || datos.lineas.length > 12) return { error: 'lineas debe ser una lista de 1 a 12 renglones', motivo: 'lineas_invalidas' };
+    lineas = [];
+    for (const l of datos.lineas) {
+      if (!l || typeof l.valor !== 'number' || !Number.isInteger(l.valor) || l.valor <= 0) return { error: `Cada renglón necesita un valor entero mayor que 0 (llegó ${JSON.stringify(l && l.valor)})`, motivo: 'lineas_invalidas' };
+      const cod = l.item_code != null && l.item_code !== '' ? String(l.item_code) : null;
+      const itL = cod ? items.find(x => String(x.code) === cod) : null;
+      if (!itL) return { error: cod ? `El ítem con código ${cod} no existe en Aliaddo.` : 'Un renglón no trae item_code.', motivo: 'item_no_definido', items: catalogo };
+      lineas.push({ item: itL, valor: l.valor, descripcion: String(l.descripcion || '').trim().slice(0, 150) });
+    }
+    const suma = lineas.reduce((a, l) => a + l.valor, 0);
+    if (suma !== valor) return { error: `Los renglones suman ${suma} y el valor del documento es ${valor}`, motivo: 'lineas_no_suman' };
+  } else {
+    const pedido = datos.item_code != null && datos.item_code !== '' ? String(datos.item_code) : (opts.itemCode ? String(opts.itemCode) : null);
+    const item = pedido ? items.find(x => String(x.code) === pedido) : null;
+    if (!item) {
+      return { error: pedido ? `El ítem con código ${pedido} no existe en Aliaddo.` : 'Falta elegir el ítem (item_code).', motivo: 'item_no_definido', items: catalogo };
+    }
+    lineas = [{ item, valor, descripcion: '' }];
+  }
+  const item = lineas[0].item;
+
+  // 4. Fecha de emisión = HOY; la fecha de la operación va en la observación (se recorta el concepto, no la fecha)
+  const fecha = hoy0;
+  const suf = ` - Fecha operación ${oper}`;
+  const obs = concepto.slice(0, 250 - suf.length) + suf;
+  const payload = {
+    kindCode: 'Documento soporte', personId, branchId,
+    paymentFormCode: 'CN', paymentMeanCode: '10',
+    currencyCode: 'COP', date: fecha, dueDate: fecha, observation: obs,
+    details: lineas.map(l => ({ itemCode: String(l.item.code), quantity: '1', unitValueBeforeTax: String(l.valor), description: l.descripcion || obs })),
+  };
+  if (dry) return { ok: true, dryRun: true, proveedor, sucursal: { id: branchId, nombre: branch.name || '' }, item, lineas: lineas.map(l => ({ item_code: String(l.item.code), valor: l.valor })), total_enviado: valor, fecha_emision: fecha, payload };
+
+  // 5. Emitir (un POST nunca se reintenta solo: sin respuesta o 5xx queda "indeterminado")
+  const bill = await aliPost(token, '/bills', payload);
+  if (!bill.ok) {
+    const indeterminado = bill.status === 0 || bill.status >= 500;
+    return { error: `Aliaddo /bills ${bill.status || 'sin respuesta'}: ${JSON.stringify(bill.data).slice(0, 400)}${indeterminado ? ' — VERIFICA en Aliaddo si el documento quedó creado antes de reintentar.' : ''}`, indeterminado, payload };
+  }
+  const d0 = bill.data || {};
+  const d = (d0.data && typeof d0.data === 'object' && !Array.isArray(d0.data)) ? d0.data : d0;
+  const numero = d.consecutive != null ? String(d.consecutive) : (d.number != null ? String(d.number) : null);
+  if (!d.id && !numero) return { error: `Aliaddo respondió ${bill.status} pero sin id ni número. NO reintentes sin verificar en Aliaddo.`, indeterminado: true, raw: d0 };
+  // 6. Comprobaciones posteriores: DIAN válida, total = valor enviado, folio dentro de la resolución. Si algo falla: verificar y parar el lote.
+  const problemas = [];
+  const stateDian = d.stateDian || null;
+  if (!/^v[aá]lid[ao]$/i.test(String(stateDian || ''))) problemas.push(`estado DIAN "${stateDian}"`);
+  const total = Number(d.totalAmount != null ? d.totalAmount : d.total);
+  if (Number.isFinite(total) && Math.round(total) !== valor) problemas.push(`total en Aliaddo ${Math.round(total)} distinto del enviado ${valor}`);
+  const folio = parseInt(String(numero || '').replace(/\D/g, ''), 10);
+  if (!Number.isFinite(folio) || folio < DS_FOLIO_MIN || folio > DS_FOLIO_MAX) problemas.push(`consecutivo "${numero}" fuera de la resolución ${DS_FOLIO_MIN}-${DS_FOLIO_MAX}`);
+  return {
+    ok: true, estado: problemas.length ? 'verificar' : 'emitido', detener: problemas.length > 0, problemas,
+    bill_id: d.id || null, numero, state_dian: stateDian, status_dian: d.statusDian || null,
+    motivo_dian: Array.isArray(d.stateDianReason) ? d.stateDianReason.join('; ') : (d.stateDianReason || null),
+    proveedor, total: valor, total_aliaddo: Number.isFinite(total) ? Math.round(total) : null, fecha_emision: fecha,
+  };
+}
+
+// Lista (solo lectura) los documentos de compra / documento soporte de Aliaddo desde una fecha: consecutivo, estado DIAN, receptor y renglones.
+export async function listarDocumentosSoporteAliaddo(token, opts = {}) {
+  if (!token) return { error: 'Token de Aliaddo no configurado en el worker' };
+  const desde = /^\d{4}-\d{2}-\d{2}$/.test(String(opts.desde || '')) ? opts.desde : '2026-01-01';
+  const vistos = new Set(), filas = [], tipos = {};
+  for (let page = 1; page <= (opts.maxPaginas || 12); page++) {
+    const r = await aliGet(token, `/bills?page=${page}&itemsPerPage=50&dateAfter=${desde}`);
+    if (!r.ok) return { error: `Aliaddo /bills ${r.status}: ${JSON.stringify(r.data).slice(0, 200)}`, filas };
+    const lote = listOf(r.data);
+    let nuevos = 0;
+    for (const b of lote) {
+      const id = idOf(b); if (id && vistos.has(id)) continue; if (id) vistos.add(id); nuevos++;
+      const kind = String(b.kindName || b.kindCode || ''); tipos[kind] = (tipos[kind] || 0) + 1;
+      if (opts.soloSoporte !== false && !/soporte/i.test(kind)) continue;
+      filas.push({
+        id, consecutive: b.consecutive, date: String(b.date || '').slice(0, 10), kind, personId: b.personId, persona: b.personName,
+        identificacion: b.personIdentification, total: b.totalAmount, status: b.status, stateDian: b.stateDian, statusDian: b.statusDian,
+        razon: Array.isArray(b.stateDianReason) ? b.stateDianReason.join('; ') : b.stateDianReason, resolutionId: b.resolutionId,
+        medio: b.paymentMeanCode, forma: b.paymentFormCode, observation: b.observation,
+        renglones: (Array.isArray(b.details) ? b.details : []).map(x => ({ itemCode: x.itemCode, descripcion: x.description, valor: x.unitValueBeforeTax, impuestos: (x.taxes || []).length, retenciones: (x.withholdings || []).length })),
+      });
+    }
+    if (lote.length < 50 || !nuevos) break;
+  }
+  return { ok: true, total: filas.length, tipos, filas };
 }
 
 // Aliaddo NO envía la factura al cliente cuando se crea por API, y el token de API no puede pedírselo:

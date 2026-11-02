@@ -8,7 +8,7 @@ import { runOcrAgent } from './agent-router.js';
 import { runManifiestoAgent } from './agent-manifiesto.js';
 import { generarReporteContadora } from './export-contadora.js';
 import { enviarFacturaCliente, correosValidos } from './factura-email.js';
-import { facturarViajeAliaddo, facturaManualAliaddo, datosFacturaAliaddo, probarEnvioEmailAliaddo, aliaddoDiagnostico, diagnosticoFacturacionAliaddo, listarClientesAliaddo, generarSoporteGasto, listarCuentasAliaddo, listarComprobantesAliaddo } from './aliaddo.js';
+import { documentoSoporteManualAliaddo, listarDocumentosSoporteAliaddo, facturarViajeAliaddo, facturaManualAliaddo, datosFacturaAliaddo, probarEnvioEmailAliaddo, aliaddoDiagnostico, diagnosticoFacturacionAliaddo, listarClientesAliaddo, generarSoporteGasto, listarCuentasAliaddo, listarComprobantesAliaddo } from './aliaddo.js';
 import { checkRecurrentes } from './recurrentes.js';
 import { generateReport } from './report-pdf.js';
 import {
@@ -1364,6 +1364,85 @@ export default {
       } catch (err) {
         return json({ error: err.message }, 500);
       }
+    }
+
+    // ── POST /api/aliaddo/documento-soporte-manual (?dryRun=1) — documento soporte a una persona identificada ──
+    // body: { op_id:'ds:STT115:1692', cedula, nombre, valor (entero), concepto, fecha_operacion, item_code }
+    // Emite con fecha de HOY. Un op_id ya emitido / en proceso / por verificar NUNCA se reenvía (anti doble emisión).
+    // Si algo no cuadra (DIAN no válida, total o folio distinto) responde 202 con detener:true: el cliente debe parar el lote.
+    const DS_TABLA = `CREATE TABLE IF NOT EXISTS documentos_soporte_manuales (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, op_id TEXT UNIQUE NOT NULL, cedula TEXT, nombre TEXT, valor REAL, concepto TEXT,
+      fecha_operacion TEXT, estado TEXT DEFAULT 'en_proceso', numero TEXT, bill_id TEXT, state_dian TEXT, motivo_dian TEXT,
+      error TEXT, usuario TEXT, creado_en TEXT DEFAULT (datetime('now','-5 hours')), actualizado_en TEXT)`;
+    if (url.pathname === '/api/aliaddo/documento-soporte-manual' || url.pathname === '/api/aliaddo/documentos-soporte-manuales' || url.pathname === '/api/aliaddo/documentos-soporte') {
+      if (!authUser || authUser.rol !== 'admin') return json({ error: 'Solo un administrador puede emitir o consultar documentos soporte' }, 403);
+    }
+    if (request.method === 'POST' && url.pathname === '/api/aliaddo/documento-soporte-manual') {
+      try {
+        const body = await request.json().catch(() => ({}));
+        const token = env.ALIADDO_API_KEY || env.aliaddo || env.ALIADDO;
+        const aliOpts = { branchId: env.ALIADDO_BRANCH_ID, emisorNit: env.EMISOR_NIT, itemCode: env.DS_ITEM_CODE };
+        if (url.searchParams.get('dryRun') === '1') {
+          const sim = await documentoSoporteManualAliaddo(token, body, { ...aliOpts, dryRun: true });
+          return json(sim.error ? { ok: false, dryRun: true, error: sim.error, motivo: sim.motivo || null, proveedor: sim.proveedor || null, items: sim.items || null } : sim, sim.error ? 400 : 200);
+        }
+        const opId = String(body.op_id || '').trim();
+        if (!/^ds:[A-Za-z0-9]{3,12}:\d{1,6}(:[A-Za-z0-9]{1,12})?$/.test(opId)) return json({ error: 'op_id inválido: usa el formato ds:PLACA:FILA (p. ej. ds:STT115:1692)' }, 400);
+        // Se valida TODO antes de reservar el op_id (un rechazo de datos no deja filas en la base)
+        const pre = await documentoSoporteManualAliaddo(token, body, { ...aliOpts, dryRun: true });
+        if (pre.error) return json({ error: pre.error, motivo: pre.motivo || null, op_id: opId, validacion: true }, 400);
+        await env.DB.prepare(DS_TABLA).run();
+        const ins = await env.DB.prepare('INSERT OR IGNORE INTO documentos_soporte_manuales (op_id, cedula, nombre, valor, concepto, fecha_operacion, usuario) VALUES (?,?,?,?,?,?,?)')
+          .bind(opId, String(body.cedula), String(body.nombre || ''), body.valor, String(body.concepto || ''), String(body.fecha_operacion || '').slice(0, 10), authUser.email).run();
+        if (!ins.meta.changes) {
+          const prev = await env.DB.prepare('SELECT estado, numero FROM documentos_soporte_manuales WHERE op_id = ?').bind(opId).first();
+          // Solo se reintenta si el intento anterior fue RECHAZADO de forma confirmada
+          const reabre = prev && prev.estado === 'error'
+            ? await env.DB.prepare("UPDATE documentos_soporte_manuales SET estado='en_proceso', error=NULL, actualizado_en=datetime('now','-5 hours') WHERE op_id=? AND estado='error'").bind(opId).run()
+            : null;
+          if (!reabre || !reabre.meta.changes) {
+            return json({ error: prev && prev.numero ? `Ya fue emitido (DS No. ${prev.numero}).` : 'Ya está en proceso o pendiente de verificar en Aliaddo; no se reenvía para no duplicarlo.', duplicada: true, estado: prev ? prev.estado : null, numero: prev ? prev.numero : null }, 409);
+          }
+        }
+        // Segunda red: la misma persona, valor y fecha de operación no puede estar ya emitida / pendiente bajo otro op_id
+        const igual = await env.DB.prepare("SELECT op_id, numero, estado FROM documentos_soporte_manuales WHERE cedula = ? AND valor = ? AND fecha_operacion = ? AND op_id != ? AND estado IN ('emitido','en_proceso','verificar')")
+          .bind(String(body.cedula), body.valor, String(body.fecha_operacion || '').slice(0, 10), opId).first();
+        if (igual && !body.permitir_igual) {
+          await env.DB.prepare("UPDATE documentos_soporte_manuales SET estado='error', error=?, actualizado_en=datetime('now','-5 hours') WHERE op_id=?").bind(`Igual a ${igual.op_id} (${igual.estado}${igual.numero ? ' No. ' + igual.numero : ''})`, opId).run();
+          return json({ error: `Ya existe un documento igual (misma cédula, valor y fecha de operación): ${igual.op_id}. Si es otro viaje distinto, envía permitir_igual:true.`, duplicada: true }, 409);
+        }
+        const r = await documentoSoporteManualAliaddo(token, body, aliOpts);
+        if (r.error) {
+          await env.DB.prepare("UPDATE documentos_soporte_manuales SET estado=?, error=?, actualizado_en=datetime('now','-5 hours') WHERE op_id=?")
+            .bind(r.indeterminado ? 'verificar' : 'error', String(r.error).slice(0, 500), opId).run();
+          return json({ error: r.error, indeterminado: !!r.indeterminado, detener: !!r.indeterminado, motivo: r.motivo || null, op_id: opId }, r.indeterminado ? 502 : 400);
+        }
+        try {
+          await env.DB.prepare("UPDATE documentos_soporte_manuales SET estado=?, numero=?, bill_id=?, state_dian=?, motivo_dian=?, error=?, actualizado_en=datetime('now','-5 hours') WHERE op_id=?")
+            .bind(r.estado, r.numero || null, r.bill_id || null, r.state_dian || null, r.motivo_dian || null, r.problemas.length ? r.problemas.join('; ') : null, opId).run();
+        } catch (e2) { /* el documento YA existe en Aliaddo: se devuelve igual el número */ }
+        return json({ ok: true, estado: r.estado, detener: r.detener, problemas: r.problemas, op_id: opId, numero: r.numero, bill_id: r.bill_id, state_dian: r.state_dian, motivo_dian: r.motivo_dian, total: r.total, total_aliaddo: r.total_aliaddo, fecha_emision: r.fecha_emision, proveedor: r.proveedor && r.proveedor.nombre }, r.detener ? 202 : 200);
+      } catch (err) {
+        return json({ error: err.message, detener: true }, 500);
+      }
+    }
+
+    // ── GET /api/aliaddo/documentos-soporte-manuales — lo emitido por este endpoint (solo lectura) ──
+    if (request.method === 'GET' && url.pathname === '/api/aliaddo/documentos-soporte-manuales') {
+      try {
+        await env.DB.prepare(DS_TABLA).run();
+        const rs = await env.DB.prepare('SELECT op_id, cedula, nombre, valor, fecha_operacion, estado, numero, state_dian, motivo_dian, error, creado_en FROM documentos_soporte_manuales ORDER BY id').all();
+        return json({ ok: true, total: (rs.results || []).length, documentos: rs.results || [] });
+      } catch (err) { return json({ error: err.message }, 500); }
+    }
+
+    // ── GET /api/aliaddo/documentos-soporte?desde=YYYY-MM-DD[&todos=1] — documentos soporte que hay en Aliaddo (solo lectura) ──
+    if (request.method === 'GET' && url.pathname === '/api/aliaddo/documentos-soporte') {
+      try {
+        const token = env.ALIADDO_API_KEY || env.aliaddo || env.ALIADDO;
+        const r = await listarDocumentosSoporteAliaddo(token, { desde: url.searchParams.get('desde'), soloSoporte: url.searchParams.get('todos') !== '1' });
+        return json(r, r.error ? 502 : 200);
+      } catch (err) { return json({ error: err.message }, 500); }
     }
 
     // ── GET /api/viajes/:id/datos-factura ────────────────────

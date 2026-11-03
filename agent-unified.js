@@ -91,32 +91,75 @@ function detectarVehiculo(texto) {
   return null;
 }
 
-export async function runUnifiedAgent(fileBase64, mimeType, apiKey, db) {
+// Con menos presupuesto que esto no vale la pena llamar a Claude
+const MIN_PRESUPUESTO_MS = 1500;
+
+// AbortSignal.timeout() dispara TimeoutError (o AbortError según el runtime): para nosotros es una falla de red
+const esTimeout = err => !!err && (err.name === 'TimeoutError' || err.name === 'AbortError');
+
+// opts (todo opcional): deadline → epoch ms hasta el que hay presupuesto de tiempo (cada fetch se recorta a lo que queda);
+// timeoutMs → tope por fetch (por defecto 25000)
+export async function runUnifiedAgent(fileBase64, mimeType, apiKey, db, opts = {}) {
   const isDoc = mimeType === 'application/pdf';
 
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01'
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 800,
-      system: SYSTEM,
-      messages: [{
-        role: 'user',
-        content: [
-          { type: isDoc ? 'document' : 'image',
-            source: { type: 'base64', media_type: mimeType, data: fileBase64 } },
-          { type: 'text', text: PROMPT }
-        ]
-      }]
-    })
+  const { timeoutMs, deadline } = opts || {};
+  const tope = timeoutMs > 0 ? timeoutMs : 25000;
+  const limite = Number.isFinite(deadline) ? deadline : null;
+
+  const reqBody = JSON.stringify({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 800,
+    system: SYSTEM,
+    messages: [{
+      role: 'user',
+      content: [
+        { type: isDoc ? 'document' : 'image',
+          source: { type: 'base64', media_type: mimeType, data: fileBase64 } },
+        { type: 'text', text: PROMPT }
+      ]
+    }]
   });
 
-  const data = await res.json();
+  // Un solo reintento tras 1.5s ante errores transitorios de Anthropic (429, 500, 502, 503, 529) si queda presupuesto
+  let res;
+  let errText = '';
+  for (let intento = 0; ; intento++) {
+    const restante = limite == null ? Infinity : limite - Date.now();
+    if (restante < MIN_PRESUPUESTO_MS) return { error: 'sonnet_sin_tiempo' };
+    try {
+      res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01'
+        },
+        body: reqBody,
+        signal: AbortSignal.timeout(Math.floor(Math.min(tope, restante)))
+      });
+    } catch (err) {
+      return { error: 'sonnet_network_failed: ' + (esTimeout(err) ? 'timeout' : err.message) };
+    }
+    if (res.ok) break;
+    errText = await res.text().catch(() => '');
+    if (intento < 1 && [429, 500, 502, 503, 529].includes(res.status)
+        && (limite == null || limite - Date.now() - 1500 >= MIN_PRESUPUESTO_MS)) {
+      await new Promise(r => setTimeout(r, 1500));
+      continue;
+    }
+    break;
+  }
+  // Antes no se revisaba res.ok: si Anthropic fallaba salía un resultado vacío (Proveedor desconocido, total 0) sin error
+  if (!res.ok) {
+    return { error: 'sonnet_http_' + res.status, raw: errText.slice(0, 300) };
+  }
+
+  let data;
+  try {
+    data = await res.json();
+  } catch (err) {
+    return { error: 'sonnet_network_failed: ' + (esTimeout(err) ? 'timeout' : err.message) };
+  }
   const raw = data.content?.find(b => b.type === 'text')?.text || '{}';
 
   let parsed;

@@ -3,6 +3,8 @@
 // Mismo contrato que agent-unified.js (Sonnet 4.6)
 // ============================================================
 
+import { gemini429, geminiBien } from './gemini-estado.js';
+
 const CATALOGO_RAPIDO = {
   '800155413': { nombre_corto: 'Biomax', categoria_default: 'Combustible' },
   '860002552': { nombre_corto: 'Terpel', categoria_default: 'Combustible' },
@@ -83,7 +85,17 @@ function detectarVehiculo(texto) {
   return null;
 }
 
-export async function runGeminiAgent(fileBase64, mimeType, apiKey, db) {
+// Con menos presupuesto que esto no vale la pena llamar a Gemini
+const MIN_PRESUPUESTO_MS = 1500;
+
+// AbortSignal.timeout() dispara TimeoutError (o AbortError según el runtime): para nosotros es una falla de red
+const esTimeout = err => !!err && (err.name === 'TimeoutError' || err.name === 'AbortError');
+
+// opts (todo opcional):
+//   reintentos → esperas en ms ante 500/503 (por defecto [1500, 3000]; [] = sin reintentos, para cuando hay respaldo)
+//   timeoutMs  → tope por fetch (por defecto 12000; con respaldo conviene menos para dejarle presupuesto al respaldo)
+//   deadline   → epoch ms hasta el que hay presupuesto de tiempo; cada fetch se recorta a lo que queda
+export async function runGeminiAgent(fileBase64, mimeType, apiKey, db, opts = {}) {
   const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
   const body = {
     contents: [{ parts: [
@@ -98,31 +110,50 @@ export async function runGeminiAgent(fileBase64, mimeType, apiKey, db) {
     }
   };
 
-  // Retry ante rate limit 429 de Gemini: hasta 2 reintentos con espera incremental (1.5s, 3s)
-  const backoffs = [1500, 3000];
+  const { reintentos, timeoutMs, deadline } = opts || {};
+  const backoffs = Array.isArray(reintentos) ? reintentos : [1500, 3000];
+  const tope = timeoutMs > 0 ? timeoutMs : 12000;
+  const limite = Number.isFinite(deadline) ? deadline : null;
+
+  // Retry ante 500/503 de Gemini con las esperas de opts.reintentos. Un 429 es cuota (no se arregla en 1.5s):
+  // NO se reintenta, y si se repite sin un éxito entre medias se pausa Gemini (gemini-estado.js) para que las demás fotos
+  // de la ráfaga vayan directo al respaldo
   let res;
+  let errText = '';
   for (let intento = 0; ; intento++) {
+    const restante = limite == null ? Infinity : limite - Date.now();
+    if (restante < MIN_PRESUPUESTO_MS) return { error: 'gemini_sin_tiempo' };
     try {
       res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-        body: JSON.stringify(body)
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(Math.floor(Math.min(tope, restante)))
       });
     } catch (err) {
-      return { error: 'gemini_network_failed: ' + err.message };
+      return { error: 'gemini_network_failed: ' + (esTimeout(err) ? 'timeout' : err.message) };
     }
-    if ((res.status === 429 || res.status === 503 || res.status === 500) && intento < backoffs.length) {
+    if (res.ok) { geminiBien(); break; }
+    errText = await res.text().catch(() => '');
+    console.warn('[gemini]', res.status, errText.slice(0, 300));
+    if (res.status === 429) { gemini429(); break; }
+    if ((res.status === 503 || res.status === 500) && intento < backoffs.length
+        && (limite == null || limite - Date.now() - backoffs[intento] >= MIN_PRESUPUESTO_MS)) {
       await new Promise(r => setTimeout(r, backoffs[intento]));
       continue;
     }
     break;
   }
   if (!res.ok) {
-    const errText = await res.text().catch(() => '');
     return { error: `gemini_http_${res.status}`, raw: errText.slice(0, 500) };
   }
 
-  const data = await res.json();
+  let data;
+  try {
+    data = await res.json();
+  } catch (err) {
+    return { error: esTimeout(err) ? 'gemini_network_failed: timeout' : 'gemini_parse_failed', raw: '' };
+  }
   const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
   let parsed;
   try {

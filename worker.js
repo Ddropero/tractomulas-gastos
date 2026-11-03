@@ -16,7 +16,7 @@ import {
   generateTotpSecret, verifyTotp, totpUri, qrCodeUrl,
   createSession, deleteSession, verifyRequest, sha256Hex
 } from './auth.js';
-import { handleTelegramUpdate, setupWebhook, checkWebhookHealth, healWebhook } from './telegram.js';
+import { handleTelegramUpdate, setupWebhook, checkWebhookHealth, healWebhook, reintentarPendientes, asegurarTablaPendientes } from './telegram.js';
 import {
   generarArchivoDispersion,
   sugerirNombreArchivo,
@@ -690,7 +690,7 @@ export default {
         const r2Key     = `soportes/${Date.now()}-${file.name}`;
         const r2Promise = env.BUCKET.put(r2Key, buf, { httpMetadata: { contentType: mimeType } });
 
-        const preview = await runManifiestoAgent(b64, mimeType, env.GEMINI_API_KEY, env.DB);
+        const preview = await runManifiestoAgent(b64, mimeType, env.GEMINI_API_KEY, env.DB, { anthropicKey: env.ANTHROPIC_API_KEY });
 
         await r2Promise;
 
@@ -3012,6 +3012,41 @@ REGLAS:
       }
     }
 
+    // ── Fotos que el bot no pudo procesar (tabla ocr_pendientes; ver telegram.js) — solo administrador ──
+    if (url.pathname === '/api/telegram/pendientes' || url.pathname === '/api/telegram/pendientes/reintentar') {
+      if (!authUser || authUser.rol !== 'admin') return json({ error: 'Solo un administrador puede ver o reintentar las fotos pendientes del bot' }, 403);
+    }
+
+    // GET /api/telegram/pendientes — las más recientes primero (máximo 100); ?estado=pendiente|procesando|resuelto|abandonado
+    if (request.method === 'GET' && url.pathname === '/api/telegram/pendientes') {
+      try {
+        const estado = url.searchParams.get('estado');
+        if (estado && !['pendiente', 'procesando', 'resuelto', 'abandonado'].includes(estado)) {
+          return json({ error: 'estado inválido: usa pendiente, procesando, resuelto o abandonado' }, 400);
+        }
+        await asegurarTablaPendientes(env);
+        const rows = estado
+          ? await env.DB.prepare('SELECT * FROM ocr_pendientes WHERE estado = ? ORDER BY id DESC LIMIT 100').bind(estado).all()
+          : await env.DB.prepare('SELECT * FROM ocr_pendientes ORDER BY id DESC LIMIT 100').all();
+        return json({ ok: true, total: (rows.results || []).length, pendientes: rows.results || [] });
+      } catch (err) {
+        return json({ error: err.message }, 500);
+      }
+    }
+
+    // POST /api/telegram/pendientes/reintentar — body opcional { id, limite }; reprocesa en serie (puede tardar hasta ~80 s)
+    if (request.method === 'POST' && url.pathname === '/api/telegram/pendientes/reintentar') {
+      try {
+        const body = (await request.json().catch(() => null)) || {};
+        const id = body.id == null || body.id === '' ? null : Number(body.id);
+        if (id !== null && (!Number.isInteger(id) || id < 1)) return json({ error: 'id inválido' }, 400);
+        const r = await reintentarPendientes(env, { id, limite: body.limite == null ? 3 : body.limite });
+        return json({ ok: true, ...r });
+      } catch (err) {
+        return json({ error: err.message }, 500);
+      }
+    }
+
     // ════════════════════════════════════════════════════════════════════
     // PAGO MASIVO FINANDINA
     // ════════════════════════════════════════════════════════════════════
@@ -3483,6 +3518,15 @@ REGLAS:
     } catch (err) {
       console.error('[CRON] Telegram health check failed:', err.message);
       telegramAlert = { had_issue: true, reason: 'check_threw', detail: err.message };
+    }
+
+    // ── 0b. Reintentar fotos del bot que quedaron pendientes (un fallo aquí no debe romper el resto del cron) ──
+    // Este cron es el único disparador automático: el lote se corta por tiempo (60 s), no por conteo, para vaciar la cola en una corrida
+    try {
+      const reintento = await reintentarPendientes(env, { limite: 10 });
+      console.log('[CRON] Pendientes del bot:', JSON.stringify(reintento));
+    } catch (err) {
+      console.error('[CRON] Reintento de pendientes failed:', err.message);
     }
 
     // 1. Obtener obligaciones pendientes

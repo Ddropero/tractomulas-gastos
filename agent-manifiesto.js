@@ -1,7 +1,11 @@
 // ============================================================
-// Agente Manifiesto Gemini 2.5 Flash FLOTA — OCR de Manifiesto Electrónico de Carga (ingresos/viajes)
-// Mismo patrón de fetch/retry que agent-gemini.js
+// Agente Manifiesto FLOTA — OCR de Manifiesto Electrónico de Carga (ingresos/viajes)
+// Gemini 2.5 Flash primero (mismo patrón de fetch que agent-gemini.js). Si Gemini no da un resultado válido
+// (429, red, JSON inválido, sin clave o en pausa) y hay clave de Anthropic, respaldo con Claude Sonnet 4.6.
+// Ambos resultados pasan por UNA sola función de normalización y sanidad (normalizarManifiesto).
 // ============================================================
+
+import { geminiDisponible, gemini429, geminiBien } from './gemini-estado.js';
 
 const VEHICULOS = ['STT115', 'STT121', 'UPO707'];
 
@@ -41,10 +45,25 @@ REGLAS:
 - valor_neto = VALOR NETO A PAGAR
 - anticipo = VALOR ANTICIPO
 - saldo_a_cobrar = SALDO A PAGAR / VALOR A PAGAR
+- FECHA: el año en curso es 2026 y las fechas del manifiesto son recientes. Si el año leído es claramente imposible (anterior a 2024 o posterior a 2027, ej. 2016/2020/2076), es un error de OCR: corrígelo a 2026 manteniendo el mes y el día. Devuelve YYYY-MM-DD.
 - VEHÍCULO: busca placa STT-115/STT-121/UPO-707 en el documento; si no aparece, null
 - Si la imagen NO es un manifiesto de carga, confianza = "baja"
 - Imagen borrosa o ilegible: confianza = "baja"
 - Responde SOLO JSON puro, sin markdown`;
+
+const CAMPOS_MONTO = ['valor_flete', 'retefuente', 'reteica', 'otras_retenciones', 'valor_neto', 'anticipo', 'saldo_a_cobrar'];
+
+// Con menos presupuesto que esto no vale la pena llamar a un modelo
+const MIN_PRESUPUESTO_MS = 1500;
+
+// Tope por llamada a Gemini; con respaldo Claude es menor para dejarle presupuesto al respaldo (si Gemini se cuelga)
+const TOPE_GEMINI_MS = 12000;
+const TOPE_GEMINI_CON_RESPALDO_MS = 8000;
+// Con respaldo, Gemini no reintenta un 500/503 si, contando lo que tardaría el reintento, le quedaría menos que esto a Claude para extraer
+const RESERVA_CLAUDE_MS = 12000;
+
+// AbortSignal.timeout() dispara TimeoutError (o AbortError según el runtime): para nosotros es una falla de red
+const esTimeout = err => !!err && (err.name === 'TimeoutError' || err.name === 'AbortError');
 
 function toNum(v) {
   if (typeof v === 'number') return v;
@@ -64,7 +83,34 @@ function detectarVehiculo(texto) {
   return null;
 }
 
-export async function runManifiestoAgent(fileBase64, mimeType, apiKey, db) {
+// YYYY-MM-DD y que sea una fecha real (no 2026-02-30)
+function fechaValida(s) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || ''));
+  if (!m) return false;
+  const y = +m[1], mo = +m[2], d = +m[3];
+  const dt = new Date(Date.UTC(y, mo - 1, d));
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === mo - 1 && dt.getUTCDate() === d;
+}
+
+// Fecha de hoy en Colombia (UTC-5 fijo, no hay horario de verano)
+function fechaHoyColombia() {
+  return new Date(Date.now() - 5 * 3600 * 1000).toISOString().slice(0, 10);
+}
+
+// Quita cercas de markdown y, si el modelo escribió texto alrededor, toma desde la primera llave hasta la última
+function extraerJson(texto) {
+  let s = String(texto || '').replace(/```json|```/g, '').trim();
+  const ini = s.indexOf('{');
+  const fin = s.lastIndexOf('}');
+  if (ini !== -1 && fin > ini) s = s.slice(ini, fin + 1);
+  const obj = JSON.parse(s);
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) throw new Error('no es un objeto JSON');
+  return obj;
+}
+
+// ── Gemini 2.5 Flash ──────────────────────────────────────
+// Devuelve { parsed } o { error, raw } (error sin el prefijo "manifiesto_")
+async function llamarGemini(fileBase64, mimeType, apiKey, { conRespaldo, deadline }) {
   const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
   const body = {
     contents: [{ parts: [
@@ -79,47 +125,196 @@ export async function runManifiestoAgent(fileBase64, mimeType, apiKey, db) {
     }
   };
 
-  // Retry ante rate limit 429 de Gemini: hasta 2 reintentos con espera incremental (1.5s, 3s)
-  const backoffs = [1500, 3000];
+  // Con respaldo Claude: un 429 (cuota) NO se reintenta (y si se repite pausa a Gemini); un 500/503 se reintenta una vez tras 1s
+  // solo si, suponiendo que el reintento tarde lo mismo que el intento fallido, a Claude todavía le queda presupuesto de sobra.
+  // Sin respaldo (solo Gemini) se conservan los reintentos de siempre (1.5s y 3s), también ante 429
+  const backoffs = conRespaldo ? [1000] : [1500, 3000];
   let res;
+  let errText = '';
   for (let intento = 0; ; intento++) {
+    const restante = deadline == null ? Infinity : deadline - Date.now();
+    if (restante < MIN_PRESUPUESTO_MS) return { error: 'sin_tiempo' };
+    const inicioIntento = Date.now();
     try {
       res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-        body: JSON.stringify(body)
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(Math.floor(Math.min(conRespaldo ? TOPE_GEMINI_CON_RESPALDO_MS : TOPE_GEMINI_MS, restante)))
       });
     } catch (err) {
-      return { error: 'manifiesto_network_failed: ' + err.message };
+      return { error: 'network_failed: ' + (esTimeout(err) ? 'timeout' : err.message) };
     }
-    if ((res.status === 429 || res.status === 503 || res.status === 500) && intento < backoffs.length) {
+    if (res.ok) { geminiBien(); break; }
+    errText = await res.text().catch(() => '');
+    console.warn('[gemini]', res.status, errText.slice(0, 300));
+    if (res.status === 429) {
+      gemini429();
+      if (conRespaldo) break;
+    }
+    // Presupuesto que debe quedar tras la espera: con respaldo, lo que necesita Claude más lo que tardaría otro intento igual al fallido
+    const reserva = conRespaldo ? RESERVA_CLAUDE_MS + (Date.now() - inicioIntento) : MIN_PRESUPUESTO_MS;
+    if ((res.status === 429 || res.status === 503 || res.status === 500) && intento < backoffs.length
+        && (deadline == null || deadline - Date.now() - backoffs[intento] >= reserva)) {
       await new Promise(r => setTimeout(r, backoffs[intento]));
       continue;
     }
     break;
   }
-  if (!res.ok) {
-    const errText = await res.text().catch(() => '');
-    return { error: `manifiesto_http_${res.status}`, raw: errText.slice(0, 500) };
-  }
+  if (!res.ok) return { error: `http_${res.status}`, raw: errText.slice(0, 500) };
 
-  const data = await res.json();
-  const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-  let parsed;
+  let data;
   try {
-    parsed = JSON.parse(raw.replace(/```json|```/g, '').trim());
-  } catch {
-    return { error: 'manifiesto_parse_failed', raw: raw.slice(0, 500) };
+    data = await res.json();
+  } catch (err) {
+    return esTimeout(err) ? { error: 'network_failed: timeout' } : { error: 'parse_failed', raw: '' };
   }
+  const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  try {
+    return { parsed: extraerJson(raw) };
+  } catch {
+    return { error: 'parse_failed', raw: raw.slice(0, 500) };
+  }
+}
 
-  const confianza = parsed.confianza || 'media';
+// ── Claude Sonnet 4.6 (respaldo) ──────────────────────────
+// Devuelve { parsed } o { error, raw } (error sin el prefijo "manifiesto_")
+async function llamarClaude(fileBase64, mimeType, anthropicKey, { deadline }) {
+  const isDoc = mimeType === 'application/pdf';
+  const reqBody = JSON.stringify({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 1200,
+    messages: [{
+      role: 'user',
+      content: [
+        { type: isDoc ? 'document' : 'image',
+          source: { type: 'base64', media_type: mimeType, data: fileBase64 } },
+        { type: 'text', text: PROMPT }
+      ]
+    }]
+  });
+
+  // Un solo reintento tras 1.5s ante errores transitorios (429, 500, 502, 503, 529) si queda presupuesto
+  let res;
+  let errText = '';
+  for (let intento = 0; ; intento++) {
+    const restante = deadline == null ? Infinity : deadline - Date.now();
+    if (restante < MIN_PRESUPUESTO_MS) return { error: 'sin_tiempo' };
+    try {
+      res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': anthropicKey,
+          'anthropic-version': '2023-06-01'
+        },
+        body: reqBody,
+        signal: AbortSignal.timeout(Math.floor(Math.min(25000, restante)))
+      });
+    } catch (err) {
+      return { error: 'network_failed: ' + (esTimeout(err) ? 'timeout' : err.message) };
+    }
+    if (res.ok) break;
+    errText = await res.text().catch(() => '');
+    if (intento < 1 && [429, 500, 502, 503, 529].includes(res.status)
+        && (deadline == null || deadline - Date.now() - 1500 >= MIN_PRESUPUESTO_MS)) {
+      await new Promise(r => setTimeout(r, 1500));
+      continue;
+    }
+    break;
+  }
+  if (!res.ok) return { error: `http_${res.status}`, raw: errText.slice(0, 300) };
+
+  let data;
+  try {
+    data = await res.json();
+  } catch (err) {
+    return esTimeout(err) ? { error: 'network_failed: timeout' } : { error: 'parse_failed', raw: '' };
+  }
+  const raw = data?.content?.find(b => b.type === 'text')?.text || '';
+  try {
+    return { parsed: extraerJson(raw) };
+  } catch {
+    return { error: 'parse_failed', raw: raw.slice(0, 500) };
+  }
+}
+
+// ── Normalización y sanidad (compartida por Gemini y Claude) ──
+// Devuelve el objeto de siempre + _proveedor, _fallback_motivo, fecha_corregida y advertencias
+function normalizarManifiesto(parsed, { proveedor, fallbackMotivo, hoy }) {
+  const advertencias = [];
+  const anioHoy = parseInt(hoy.slice(0, 4), 10);
+
+  const m = {};
+  for (const k of CAMPOS_MONTO) m[k] = toNum(parsed[k]);
+
+  // Número de manifiesto: solo cuenta como legible si trae al menos 3 dígitos (y alguno distinto de cero). Cualquier relleno que
+  // escriba el modelo ("null", "N/A", "No legible", "ILEGIBLE", "0", "-") es no legible: guardado como número, dos manifiestos
+  // borrosos distintos coincidirían en el anti-duplicado y el segundo se perdería. Se guarda el número tal como viene en el
+  // manifiesto (G29841, MC017958, 006-000037498 son números reales y salen así en las facturas); el anti-duplicado compara
+  // por los dígitos (ver telegram.js), así "MC-791199" y "791199" siguen siendo el mismo número entre lecturas
+  const crudo = String(parsed.numero_manifiesto == null ? '' : parsed.numero_manifiesto).replace(/\s+/g, ' ').trim().slice(0, 40);
+  const digitos = crudo.replace(/\D/g, '');
+  const numero = digitos.length >= 3 && /[1-9]/.test(digitos) ? crudo : null;
+
   const vehiculo = detectarVehiculo(parsed.vehiculo) ||
     detectarVehiculo(`${parsed.numero_manifiesto || ''} ${parsed.origen || ''} ${parsed.destino || ''} ${parsed.conductor || ''}`);
 
+  // Fecha: formato YYYY-MM-DD y fecha real; si el año cae fuera de [año-1, año+1] es error de OCR (2016, 2024...):
+  // se reemplaza solo el año por el actual y se marca para revisión
+  let fecha = null;
+  let fechaCorregida = false;
+  const fechaLeida = String(parsed.fecha_viaje == null ? '' : parsed.fecha_viaje).trim();
+  if (fechaLeida) {
+    if (!fechaValida(fechaLeida)) {
+      advertencias.push(`Fecha no válida (${fechaLeida}): se dejó vacía`);
+    } else {
+      fecha = fechaLeida;
+      const anio = parseInt(fechaLeida.slice(0, 4), 10);
+      if (anio < anioHoy - 1 || anio > anioHoy + 1) {
+        const corregida = String(anioHoy).padStart(4, '0') + fechaLeida.slice(4);
+        if (fechaValida(corregida)) {   // 29-feb de un año bisiesto mal leído no existe en el año actual
+          fecha = corregida;
+          fechaCorregida = true;
+          advertencias.push(`Fecha leída ${fechaLeida}; año corregido a ${anioHoy}`);
+        } else {
+          fecha = null;
+          advertencias.push(`Fecha leída ${fechaLeida}: no existe en ${anioHoy}, se dejó vacía`);
+        }
+      }
+    }
+  }
+
+  // Confianza declarada por el modelo (alta | media | baja); cualquier otra cosa cuenta como media
+  let confianza = String(parsed.confianza || '').trim().toLowerCase();
+  if (!['alta', 'media', 'baja'].includes(confianza)) confianza = 'media';
+
+  // Aritmética (tolerancia 2 pesos), solo cuando vienen todos los montos:
+  //   valor_neto = flete − retefuente − reteica − otras  ·  saldo = valor_neto − anticipo
+  if (CAMPOS_MONTO.every(k => parsed[k] !== undefined && parsed[k] !== null && parsed[k] !== '')) {
+    let descuadra = false;
+    const netoEsperado = m.valor_flete - m.retefuente - m.reteica - m.otras_retenciones;
+    if (Math.abs(m.valor_neto - netoEsperado) > 2) {
+      descuadra = true;
+      advertencias.push(`No cuadra: valor neto ${Math.round(m.valor_neto)} ≠ flete − retenciones ${Math.round(netoEsperado)}`);
+    }
+    const saldoEsperado = m.valor_neto - m.anticipo;
+    if (Math.abs(m.saldo_a_cobrar - saldoEsperado) > 2) {
+      descuadra = true;
+      advertencias.push(`No cuadra: saldo a cobrar ${Math.round(m.saldo_a_cobrar)} ≠ neto − anticipo ${Math.round(saldoEsperado)}`);
+    }
+    if (descuadra && confianza === 'alta') confianza = 'media';
+  }
+
+  // Sin número de manifiesto o sin flete no hay con qué confiar en el registro
+  if (!numero) advertencias.push('Sin número de manifiesto legible');
+  if (!m.valor_flete) advertencias.push('Valor del flete en 0');
+  if (!numero || !m.valor_flete) confianza = 'baja';
+
   return {
     es_manifiesto: true,
-    numero_manifiesto: parsed.numero_manifiesto || null,
-    fecha_viaje: parsed.fecha_viaje || null,
+    numero_manifiesto: numero,
+    fecha_viaje: fecha,
     vehiculo: vehiculo || null,
     conductor: parsed.conductor || null,
     origen: parsed.origen || null,
@@ -130,15 +325,76 @@ export async function runManifiestoAgent(fileBase64, mimeType, apiKey, db) {
     destinatario: parsed.destinatario || null,
     mercancia: parsed.mercancia || null,
     peso_kg: toNum(parsed.peso_kg),
-    valor_flete: toNum(parsed.valor_flete),
-    retefuente: toNum(parsed.retefuente),
-    reteica: toNum(parsed.reteica),
-    otras_retenciones: toNum(parsed.otras_retenciones),
-    valor_neto: toNum(parsed.valor_neto),
-    anticipo: toNum(parsed.anticipo),
-    saldo_a_cobrar: toNum(parsed.saldo_a_cobrar),
+    valor_flete: m.valor_flete,
+    retefuente: m.retefuente,
+    reteica: m.reteica,
+    otras_retenciones: m.otras_retenciones,
+    valor_neto: m.valor_neto,
+    anticipo: m.anticipo,
+    saldo_a_cobrar: m.saldo_a_cobrar,
     confianza_global: confianza,
     estado: confianza === 'baja' ? 'revision' : 'confirmado',
     archivo_r2: null,
+    _proveedor: proveedor,
+    _fallback_motivo: fallbackMotivo || null,
+    fecha_corregida: fechaCorregida,
+    advertencias,
   };
+}
+
+// opts (todo opcional): { anthropicKey, deadline, hoy }
+//   anthropicKey → habilita el respaldo con Claude Sonnet 4.6 (Gemini falla rápido, sin reintentos por 429)
+//   deadline     → epoch ms hasta el que hay presupuesto de tiempo; cada fetch se recorta a lo que queda
+//   sinGemini    → ni se intenta Gemini, directo a Claude (el llamador sabe que acaba de fallar con esta misma foto)
+//   hoy          → YYYY-MM-DD para la sanidad del año (por defecto la fecha de ahora en UTC-5)
+export async function runManifiestoAgent(fileBase64, mimeType, apiKey, db, opts = {}) {
+  const { anthropicKey, deadline, hoy, sinGemini } = opts || {};
+  const limite = Number.isFinite(deadline) ? deadline : null;
+  const fechaHoy = fechaValida(hoy) ? hoy : fechaHoyColombia();
+
+  let parsed = null;
+  let proveedor = null;
+  const fallos = {};   // motivo de falla por proveedor
+  const raws = {};
+
+  // 1. Gemini. Con respaldo, si está en pausa (429 repetidos) o el llamador lo descarta ni se intenta; sin respaldo se intenta igual
+  if (!apiKey) {
+    fallos.gemini = 'sin_clave';
+  } else if (anthropicKey && sinGemini) {
+    fallos.gemini = 'omitido';
+  } else if (anthropicKey && !geminiDisponible()) {
+    fallos.gemini = 'pausado';
+  } else {
+    const g = await llamarGemini(fileBase64, mimeType, apiKey, { conRespaldo: !!anthropicKey, deadline: limite });
+    if (g.parsed) { parsed = g.parsed; proveedor = 'gemini-2.5-flash'; }
+    else { fallos.gemini = g.error; raws.gemini = g.raw; }
+  }
+
+  // 2. Respaldo Claude si Gemini no dio un resultado válido
+  if (!parsed && anthropicKey) {
+    console.log(`[MANIFIESTO] Gemini sin resultado (${fallos.gemini}), respaldo con Claude`);
+    const c = await llamarClaude(fileBase64, mimeType, anthropicKey, { deadline: limite });
+    if (c.parsed) { parsed = c.parsed; proveedor = 'claude-sonnet-4-6'; }
+    else { fallos.claude = c.error; raws.claude = c.raw; }
+  }
+
+  // 3. Fallaron todos los proveedores disponibles: el error lleva el motivo de cada uno
+  if (!parsed) {
+    if (!anthropicKey) {
+      // Solo Gemini: formato de error de siempre (manifiesto_http_429, manifiesto_network_failed: ..., manifiesto_parse_failed)
+      const out = { error: 'manifiesto_' + fallos.gemini };
+      if (raws.gemini !== undefined) out.raw = raws.gemini;
+      return out;
+    }
+    const raw = [raws.gemini && `gemini: ${raws.gemini}`, raws.claude && `claude: ${raws.claude}`].filter(Boolean).join(' | ');
+    const out = { error: `manifiesto_gemini_${fallos.gemini}+claude_${fallos.claude}` };
+    if (raw) out.raw = raw.slice(0, 500);
+    return out;
+  }
+
+  return normalizarManifiesto(parsed, {
+    proveedor,
+    fallbackMotivo: proveedor === 'claude-sonnet-4-6' ? `gemini_${fallos.gemini}` : null,
+    hoy: fechaHoy
+  });
 }

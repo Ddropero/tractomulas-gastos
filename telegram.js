@@ -6,9 +6,19 @@
 
 import { runOcrAgent } from './agent-router.js';
 import { runManifiestoAgent } from './agent-manifiesto.js';
+import { sha256Hex } from './auth.js';
+import {
+  placasFlota, placasDesdeD1, destinatarioAlertas, getEmpresa, etiquetaPlaca, versionTerminos, urlBase,
+  esProduccion, contactoSoporte
+} from './config-empresa.js';
 
 const TG_API = 'https://api.telegram.org';
-const VEHICULOS_FLOTA = ['STT115', 'STT121', 'UPO707'];
+// Tipos de archivo que el bot acepta como documento (imágenes de mapa de bits y PDF)
+const TIPOS_DOCUMENTO = new Set([
+  'image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif', 'image/bmp', 'image/tiff',
+  'application/pdf'
+]);
+// Las placas de la flota salen de config-empresa.js (placasFlota): la lista fija de siempre, o la tabla vehiculos con PLACAS_FUENTE="d1"
 
 // El webhook responde 200 enseguida y el trabajo corre en ctx.waitUntil, con un techo de ~30 s de pared
 // después de responder (pasado eso el proceso muere SIN dejar rastro). 26 s deja margen para registrar el pendiente y avisar.
@@ -91,8 +101,32 @@ async function vehiculoDeChat(db, chatId) {
 
 // ── Autorización: el chat es un grupo de vehículo, o admin ──
 async function autorizar(db, env, chatId) {
-  const veh = await vehiculoDeChat(db, chatId);
+  // Con la flota en D1 (instancias con inscripción) un chat solo se autoriza por /start <código>: la vía de
+  // vehiculos.telegram_chat_id se saltaría el /acepto del conductor y no dejaría constancia del consentimiento
+  const veh = placasDesdeD1(env) ? null : await vehiculoDeChat(db, chatId);
   if (veh) return { ok: true, vehiculo: veh.placa, vehiculoNombre: veh.nombre };
+  // Chats vinculados con /start <código> (tabla telegram_chats). Si la tabla no existe se sigue con la variable, como siempre
+  try {
+    const row = await db.prepare(
+      'SELECT rol, placa, nombre, acepto_datos_en FROM telegram_chats WHERE chat_id = ? AND activo = 1'
+    ).bind(String(chatId)).first();
+    if (row) {
+      let placa = row.placa || null;
+      if (!placa && placasDesdeD1(env)) {
+        const placas = await placasFlota(env);
+        if (placas.length === 1) placa = placas[0];   // flota de una sola mula: el chat del dueño toma esa placa
+      }
+      return {
+        ok: true,
+        vehiculo: placa,
+        vehiculoNombre: placa ? etiquetaPlaca(placa) : null,
+        esAdmin: row.rol === 'dueno',
+        rol: row.rol,
+        nombreChat: row.nombre || null,
+        pendienteAceptar: row.rol === 'conductor' && !row.acepto_datos_en
+      };
+    }
+  } catch { /* sin tabla telegram_chats */ }
   // Admin chats (lista blanca para comandos / pruebas)
   const raw = env.TELEGRAM_AUTHORIZED_CHATS || '';
   const allowed = raw.split(',').map(s => s.trim()).filter(Boolean);
@@ -116,6 +150,8 @@ async function checkDuplicate(db, numeroDocumento, total, fecha, proveedorNit) {
 // ── Notificación email (Resend) ───────────────────────────
 async function notificarEmail(env, numero, vehiculo, preview) {
   if (!env.RESEND_API_KEY) return;
+  const para = await destinatarioAlertas(env);   // producción: el de siempre; otras instancias: null si correo_alertas está apagada
+  if (!para) return;
   const fmt = v => new Intl.NumberFormat('es-CO', { style:'currency', currency:'COP', maximumFractionDigits:0 }).format(v || 0);
   const html = `<div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;background:#0d0e0f;color:#e8ebee;padding:20px;border-radius:10px;">
     <h2 style="font-size:16px;font-weight:300;color:#a0d0f0;margin:0 0 12px;">🚛 Gasto registrado por Telegram</h2>
@@ -137,7 +173,7 @@ async function notificarEmail(env, numero, vehiculo, preview) {
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${env.RESEND_API_KEY}` },
       body: JSON.stringify({
         from: env.ALERT_EMAIL_FROM || 'Flota Alertas <alertas@davidduque.com>',
-        to: [env.ALERT_EMAIL_TO || 'david@davidduque.com'],
+        to: [para],
         subject: `🚛 ${vehiculo || 'Flota'} — ${fmt(preview.total)} — ${preview.proveedor_nombre || preview.concepto || 'Gasto'}`,
         html
       })
@@ -145,11 +181,168 @@ async function notificarEmail(env, numero, vehiculo, preview) {
   } catch {}
 }
 
+// ── Ayuda del bot (SOLO fuera de producción) ──────────────
+// En producción nada de esta sección se usa: los comandos y los textos de siempre no cambian.
+// Todos estos mensajes van sin Markdown (SIN_FORMATO): llevan nombres que vienen de la base.
+
+// Menú de comandos del bot (setMyCommands). El menú de todos los chats (COMANDOS_GLOBALES, sin /estado, que es solo
+// del dueño) lo registra registrarComandos() al configurar el webhook; el completo se le pone al chat del dueño al vincularlo.
+export const COMANDOS_BOT = [
+  { command: 'ayuda', description: 'Cómo mandar las fotos' },
+  { command: 'estado', description: 'Cómo va la mula este mes' },
+  { command: 'total', description: 'Total de gastos del mes' },
+  { command: 'ultimos', description: 'Últimos 5 gastos' }
+];
+
+export const COMANDOS_GLOBALES = COMANDOS_BOT.filter(c => c.command !== 'estado');
+
+// Chat sin vincular (exportada para las pruebas). tablero = URL del tablero o null
+export function textoChatSinVincular(tablero) {
+  return 'Este chat todavía no está conectado.\n\n' +
+    `Si usted es el dueño: entre al tablero${tablero ? ' (' + tablero + ')' : ''} y toque "Conectar mi Telegram".\n\n` +
+    'Si es conductor: pídale el enlace al dueño de la mula y ábralo en este celular.';
+}
+
+const COMO_TOMAR_FOTO = 'el documento completo y derecho, con buena luz, sin sombras ni dedos encima, y un solo documento por foto';
+const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+
+// Resumen de qué mandar y cómo, distinto para el dueño y para el conductor (exportada para las pruebas).
+// datos = { tablero: URL del tablero o null, contacto: a quién le escribe el dueño o null, responsable: nombre del dueño o null }
+export function textoAyuda(rol, datos = {}) {
+  if (rol === 'conductor') {
+    return [
+      'CÓMO MANDAR LAS FOTOS',
+      '1. Manifiesto: foto completa y derecha, con buena luz, apenas se lo entreguen.',
+      '2. Recibos de ACPM, peajes y gastos: una foto por cada recibo. No junte varios en una foto.',
+      '3. Que se lean los números: sin sombras ni dedos encima.',
+      '4. Yo le respondo en menos de un minuto con lo que leí.',
+      '5. Si le digo que no pude leer la foto, tómela otra vez más clara. Si leí mal un valor, avísele al dueño: él lo corrige.',
+      `6. ¿Dudas? Escríbale ${datos.responsable ? 'a ' + datos.responsable : 'al dueño de la flota'}.`
+    ].join('\n');
+  }
+  return [
+    'CÓMO USAR EL BOT',
+    '1. Manifiesto: mándeme la foto completa y derecha, con buena luz. Que se lean el número, la placa y los valores.',
+    '2. Gastos: una foto por cada recibo de ACPM, peaje o gasto. Un documento por foto.',
+    '3. Yo le respondo en menos de un minuto con lo que leí: el viaje con su flete y su saldo, o el gasto con su valor.',
+    `4. Si leí algo mal, corríjalo en el tablero${datos.tablero ? ': ' + datos.tablero : ''}. Si le digo que no pude leer la foto, tómela otra vez más clara.`,
+    '5. /estado le dice cómo va la mula este mes. /total y /ultimos muestran los gastos.',
+    `6. ¿Dudas? Escríbale a ${datos.contacto || 'quien le envió la invitación'}.`
+  ].join('\n');
+}
+
+function urlTablero(env) {
+  const base = urlBase(env, null);
+  return base ? `${base}/dashboard.html` : null;
+}
+
+async function ayudaPara(env, rol) {
+  if (rol === 'conductor') {
+    let responsable = null;
+    try { responsable = (await getEmpresa(env)).nombre || null; } catch {}
+    return textoAyuda('conductor', { responsable });
+  }
+  return textoAyuda('dueno', { tablero: urlTablero(env), contacto: contactoSoporte(env) });
+}
+
+// Mensaje cuando el bot no pudo leer una foto (exportada para las pruebas). El motivo técnico queda en el log y en ocr_pendientes.
+// caso: 'guardada' (se reintenta sola) | 'no_recibida' | 'pesada' | 'tipo' | 'abandonada'
+export function avisoFotoNoLeida(caso) {
+  if (caso === 'pesada') return 'Ese archivo pesa demasiado (más de 20 MB). Mándelo como foto, no como archivo.';
+  if (caso === 'tipo') return 'Solo puedo leer fotos (JPG o PNG) o PDF. Mándeme una foto del documento.';
+  if (caso === 'no_recibida') return `No pude recibir esta foto. Mándela otra vez, por favor: ${COMO_TOMAR_FOTO}.`;
+  if (caso === 'abandonada') {
+    return `No pude leer una foto que mandó antes, aunque lo intenté varias veces. Tómela otra vez, por favor: ${COMO_TOMAR_FOTO}.`;
+  }
+  return `No pude leer esta foto. Quedó guardada y la vuelvo a intentar ${CUANDO_REINTENTA}\n\n` +
+    `Si quedó oscura, movida o cortada, mejor tómela otra vez: ${COMO_TOMAR_FOTO}.`;
+}
+
+const cuantos = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
+
+// Líneas de /estado (exportada para las pruebas). filas = [{ placa, viajes, gastos }]
+export function textoEstado(mes, filas, pendientes, tablero) {
+  const lineas = [`CÓMO VA ${String(mes).toUpperCase()}`];
+  if (!filas.length) lineas.push('Todavía no hay vehículos registrados.');
+  for (const f of filas) {
+    lineas.push(`${etiquetaPlaca(f.placa)}: ${cuantos(f.viajes, 'viaje', 'viajes')} y ${cuantos(f.gastos, 'gasto', 'gastos')}.`);
+  }
+  lineas.push(pendientes > 0
+    ? `Documentos pendientes de leer: ${pendientes}. Los vuelvo a intentar ${CUANDO_REINTENTA}`
+    : 'Documentos pendientes de leer: ninguno.');
+  if (tablero) lineas.push(`Qué transportadora le debe y cuánto le deja la mula: ${tablero}`);
+  return lineas.join('\n');
+}
+
+// Viajes y gastos del mes (hora de Colombia) por placa, y documentos que el bot todavía no ha podido leer
+async function estadoDelMes(env, auth) {
+  const hoy = fechaBogota();
+  const desde = `${hoy.slice(0, 7)}-01`;
+  const placas = auth.vehiculo ? [auth.vehiculo] : await placasFlota(env);
+  const n = async (sql, ...binds) => {
+    try { return ((await env.DB.prepare(sql).bind(...binds).first()) || {}).n || 0; } catch { return 0; }
+  };
+  const filas = [];
+  for (const placa of placas) {
+    filas.push({
+      placa,
+      viajes: await n('SELECT COUNT(*) AS n FROM viajes WHERE vehiculo = ? AND fecha_viaje >= ?', placa, desde),
+      gastos: await n('SELECT COUNT(*) AS n FROM gastos WHERE vehiculo = ? AND fecha >= ?', placa, desde)
+    });
+  }
+  // La tabla ocr_pendientes se crea con la primera foto que falla: si no existe, no hay pendientes
+  const pendientes = await n("SELECT COUNT(*) AS n FROM ocr_pendientes WHERE estado IN ('pendiente', 'procesando')");
+  return textoEstado(MESES[Number(hoy.slice(5, 7)) - 1], filas, pendientes, urlTablero(env));
+}
+
+// Registra el menú de comandos del bot. En producción no hace nada (devuelve null); si no, true/false. Nunca lanza.
+export async function registrarComandos(env) {
+  if (esProduccion(env) || !env.TELEGRAM_BOT_TOKEN) return null;
+  try {
+    const r = await tgRequest(env.TELEGRAM_BOT_TOKEN, 'setMyCommands', { commands: COMANDOS_GLOBALES });
+    if (!(r && r.ok)) console.warn('[TG] setMyCommands rechazado:', String((r && r.description) || '').slice(0, 200));
+    return !!(r && r.ok);
+  } catch (err) {
+    console.warn('[TG] setMyCommands falló:', sinSecretos(err && err.message));
+    return false;
+  }
+}
+
+// Menú propio del chat según su rol: el del dueño lleva /estado; el del conductor vuelve al de todos.
+// Solo fuera de producción. Nunca lanza: si Telegram lo rechaza, el chat queda con el menú de todos.
+async function menuDelChat(env, chatId, rol) {
+  if (esProduccion(env) || !env.TELEGRAM_BOT_TOKEN) return;
+  const scope = { type: 'chat', chat_id: chatId };
+  try {
+    const r = rol === 'dueno'
+      ? await tgRequest(env.TELEGRAM_BOT_TOKEN, 'setMyCommands', { commands: COMANDOS_BOT, scope })
+      : await tgRequest(env.TELEGRAM_BOT_TOKEN, 'deleteMyCommands', { scope });
+    if (!(r && r.ok)) console.warn('[TG] menú del chat rechazado:', String((r && r.description) || '').slice(0, 200));
+  } catch (err) {
+    console.warn('[TG] menú del chat falló:', sinSecretos(err && err.message));
+  }
+}
+
 // ── Comandos ──────────────────────────────────────────────
 async function handleCommand(env, chatId, text, fromName, auth) {
   const token = env.TELEGRAM_BOT_TOKEN;
   const cmd = text.trim().split(' ')[0].toLowerCase().replace(/@\w+$/, '');
   const vehLabel = auth.vehiculoNombre ? ` (${auth.vehiculoNombre})` : '';
+  const guiado = !esProduccion(env);   // ayuda nueva: solo fuera de producción
+
+  if (guiado && (cmd === '/ayuda' || cmd === '/help' || cmd === '/start')) {
+    await sendMessage(token, chatId, await ayudaPara(env, auth.rol), SIN_FORMATO);
+    return;
+  }
+
+  if (guiado && cmd === '/estado') {
+    if (auth.rol === 'conductor') {
+      await sendMessage(token, chatId, 'Ese comando es para el dueño de la flota. Escriba /ayuda para ver cómo mandar las fotos.', SIN_FORMATO);
+      return;
+    }
+    await sendMessage(token, chatId, await estadoDelMes(env, auth), SIN_FORMATO);
+    return;
+  }
 
   if (cmd === '/start' || cmd === '/help') {
     await sendMessage(token, chatId,
@@ -157,7 +350,11 @@ async function handleCommand(env, chatId, text, fromName, auth) {
       `Hola ${escapeMd(fromName)} 👋\n\n` +
       (auth.vehiculo
         ? `Este grupo está vinculado a *${escapeMd(auth.vehiculoNombre)}*.\n\nEnvía una *foto o PDF* de cualquier factura, peaje, recibo de combustible o gasto y lo registro automáticamente para este vehículo.\n\nTambién detecto *manifiestos electrónicos de carga* 🚚 y los registro como viajes/ingresos (flete, anticipo, saldo a cobrar).`
-        : `Tu chat no está vinculado a un vehículo todavía.`) +
+        : auth.rol === 'dueno'
+          ? `Este chat está vinculado como dueño de la flota. Envíe aquí fotos o PDF de recibos, facturas y manifiestos.`
+          : placasDesdeD1(env)
+            ? `Este chat no está vinculado a un vehículo todavía. Abra el enlace de vinculación que le envió el dueño.`
+            : `Tu chat no está vinculado a un vehículo todavía.`) +
       `\n\n*Comandos:*\n/total — Total del mes${vehLabel}\n/ultimos — Últimos 5 gastos\n/id — Ver el chat_id de este grupo\n/help — Ayuda`
     );
     return;
@@ -166,7 +363,9 @@ async function handleCommand(env, chatId, text, fromName, auth) {
   if (cmd === '/id') {
     await sendMessage(token, chatId,
       `🆔 *chat_id de este grupo:*\n\`${chatId}\`\n\n` +
-      (auth.vehiculo ? `Vinculado a: *${escapeMd(auth.vehiculoNombre)}*` : `_Sin vehículo. Configúralo en el dashboard → Vehículos → pega este chat_id._`)
+      (auth.vehiculo ? `Vinculado a: *${escapeMd(auth.vehiculoNombre)}*`
+        : placasDesdeD1(env) ? `_Sin vehículo. Abra el enlace de vinculación que le envió el dueño._`
+        : `_Sin vehículo. Configúralo en el dashboard → Vehículos → pega este chat_id._`)
     );
     return;
   }
@@ -196,7 +395,145 @@ async function handleCommand(env, chatId, text, fromName, auth) {
     return;
   }
 
+  // /acepto: el conductor autoriza el tratamiento de sus datos (Ley 1581 de 2012). Sin las tablas del piloto
+  // (producción) no hace nada y sigue como cualquier comando desconocido
+  if (cmd === '/acepto') {
+    try {
+      const fila = await env.DB.prepare(
+        'SELECT rol, nombre, acepto_datos_en FROM telegram_chats WHERE chat_id = ? AND activo = 1'
+      ).bind(String(chatId)).first();
+      if (fila) {
+        if (fila.rol !== 'conductor') {
+          await sendMessage(token, chatId, 'Su autorización quedó registrada al inscribirse. No hace falta repetirla aquí.', SIN_FORMATO);
+          return;
+        }
+        if (!fila.acepto_datos_en) {
+          await env.DB.batch([
+            env.DB.prepare("UPDATE telegram_chats SET acepto_datos_en = datetime('now') WHERE chat_id = ? AND acepto_datos_en IS NULL")
+              .bind(String(chatId)),
+            env.DB.prepare("INSERT INTO consentimientos (sujeto, tipo, version_texto, chat_id, nombre) VALUES ('conductor', 'datos_1581', ?, ?, ?)")
+              .bind(versionTerminos(env), String(chatId), String(fila.nombre || fromName || '').slice(0, 80) || null)
+          ]);
+        }
+        await sendMessage(token, chatId, guiado
+          ? 'Gracias. Quedó registrada su autorización. Ya puede mandar las fotos.\n\n' + await ayudaPara(env, 'conductor')
+          : 'Gracias. Quedó registrada su autorización. Ya puede enviar aquí las fotos de recibos, facturas y manifiestos.', SIN_FORMATO);
+        return;
+      }
+    } catch (err) {
+      console.warn('[TG] /acepto no disponible:', sinSecretos(err && err.message));
+    }
+  }
+
+  if (guiado) {
+    await sendMessage(token, chatId, 'No conozco ese comando. Escriba /ayuda para ver cómo mandar las fotos.', SIN_FORMATO);
+    return;
+  }
   await sendMessage(token, chatId, 'Envíame una *foto* del gasto o usa /help');
+}
+
+// ── Vinculación de chats por /start <código> ──────────────
+// TEXTO PENDIENTE DE APROBACIÓN DEL DUEÑO: borrador del aviso de tratamiento de datos que recibe el conductor.
+// Si cambia, subir TERMINOS_VERSION.
+function avisoDatosConductor(responsable, version) {
+  return 'AVISO DE TRATAMIENTO DE DATOS PERSONALES (Ley 1581 de 2012)\n\n' +
+    `Responsable: ${responsable}.\n` +
+    'Datos que se tratan: su nombre, su usuario e identificador de Telegram, y las fotos y documentos que usted envíe a este chat ' +
+    '(recibos, facturas y manifiestos de carga), que pueden traer su nombre y su número de cédula.\n' +
+    'Finalidad: registrar los gastos y los viajes del vehículo y llevar las cuentas de la operación. ' +
+    'Las imágenes se leen con servicios automáticos de reconocimiento de texto prestados por terceros.\n' +
+    'Sus derechos: conocer, actualizar, rectificar y pedir que se supriman sus datos, y revocar esta autorización, ' +
+    'escribiéndole al responsable.\n' +
+    `Versión del texto: ${version}`;
+}
+
+// Devuelve 'vinculado' | 'invalido' | 'error' | 'no_disponible' (sin las tablas del piloto: quien llama sigue como siempre).
+// El código nunca se guarda ni se registra en claro: solo su hash.
+async function vincularChat(env, chatId, codigo, from, chat) {
+  const token = env.TELEGRAM_BOT_TOKEN;
+  let hash, reclamo;
+  try {
+    hash = await sha256Hex(codigo);
+    // Reclamo atómico: un código sirve una sola vez y solo antes de vencer
+    reclamo = await env.DB.prepare(
+      `UPDATE telegram_vinculos SET usado_en = datetime('now'), chat_id = ?
+        WHERE codigo_hash = ? AND usado_en IS NULL AND expira_en > datetime('now')`
+    ).bind(String(chatId), hash).run();
+  } catch {
+    return 'no_disponible';
+  }
+  if (!(reclamo && reclamo.meta && reclamo.meta.changes === 1)) {
+    // Mismo mensaje si no existe, ya se usó o venció
+    await sendMessage(token, chatId,
+      'Este enlace de vinculación no es válido, ya se usó o venció. Pídale uno nuevo al dueño de la flota.', SIN_FORMATO);
+    return 'invalido';
+  }
+
+  let v;
+  try {
+    v = await env.DB.prepare('SELECT rol, placa, nombre FROM telegram_vinculos WHERE codigo_hash = ?').bind(hash).first();
+    if (!v) throw new Error('vínculo no encontrado tras reclamarlo');
+    await env.DB.prepare(
+      `INSERT INTO telegram_chats (chat_id, rol, placa, nombre, tg_user_id, tg_username, activo, vinculado_en, acepto_datos_en)
+       VALUES (?, ?, ?, ?, ?, ?, 1, datetime('now'), NULL)
+       ON CONFLICT(chat_id) DO UPDATE SET
+         rol = excluded.rol, placa = excluded.placa, nombre = excluded.nombre,
+         tg_user_id = excluded.tg_user_id, tg_username = excluded.tg_username,
+         activo = 1, vinculado_en = datetime('now'), acepto_datos_en = NULL`
+    ).bind(
+      String(chatId), v.rol, v.placa || null, v.nombre || null,
+      from && from.id != null ? String(from.id) : null,
+      from && from.username ? String(from.username).slice(0, 64) : null
+    ).run();
+  } catch (err) {
+    console.error('[TG] vinculación falló:', sinSecretos(err && err.message));
+    // Se libera el código para que el enlace siga sirviendo
+    try {
+      await env.DB.prepare('UPDATE telegram_vinculos SET usado_en = NULL, chat_id = NULL WHERE codigo_hash = ?').bind(hash).run();
+    } catch {}
+    await sendMessage(token, chatId, 'No pude completar la vinculación. Intente de nuevo en un momento.', SIN_FORMATO);
+    return 'error';
+  }
+
+  const placaTxt = v.placa ? etiquetaPlaca(v.placa) : null;
+  if (!esProduccion(env)) {
+    await menuDelChat(env, chatId, v.rol);
+    // Bienvenida con los 3 pasos que siguen para ese rol
+    if (v.rol === 'dueno') {
+      await sendMessage(token, chatId,
+        `Listo. Este chat quedó conectado como dueño${placaTxt ? ' (' + placaTxt + ')' : ''}.\n\n` +
+        'Los 3 pasos que siguen:\n' +
+        '1. Mande aquí la foto del primer manifiesto: completa, derecha y con buena luz.\n' +
+        '2. Mande una foto por cada recibo de ese viaje (ACPM, peajes, gastos).\n' +
+        '3. Mándele a su conductor por WhatsApp el enlace que le salió al inscribirse. Si lo perdió, pida otro en el tablero.\n\n' +
+        'Escriba /ayuda cuando quiera repasar cómo tomar las fotos.', SIN_FORMATO);
+    } else {
+      let responsable = 'el dueño de la flota';
+      try { responsable = (await getEmpresa(env)).nombre || responsable; } catch {}
+      await sendMessage(token, chatId,
+        `Hola. Este chat quedó conectado como conductor${placaTxt ? ' de ' + placaTxt : ''}.\n\n` +
+        'Los 3 pasos que siguen:\n' +
+        '1. Lea el aviso de abajo.\n' +
+        '2. Responda /acepto para autorizar.\n' +
+        '3. Mande la foto del manifiesto y una foto por cada recibo de ACPM, peaje o gasto.\n\n' +
+        avisoDatosConductor(responsable, versionTerminos(env)) +
+        '\n\nPara autorizar y empezar a mandar fotos, responda /acepto', SIN_FORMATO);
+    }
+    return 'vinculado';
+  }
+  if (v.rol === 'dueno') {
+    await sendMessage(token, chatId,
+      `Listo. Este chat quedó vinculado como dueño${placaTxt ? ' (' + placaTxt + ')' : ''}.\n\n` +
+      'Envíe aquí fotos o PDF de recibos, facturas y manifiestos de carga y quedan registrados. Use /help para ver los comandos.', SIN_FORMATO);
+  } else {
+    let responsable = 'el dueño de la flota';
+    try { responsable = (await getEmpresa(env)).nombre || responsable; } catch {}
+    await sendMessage(token, chatId,
+      `Hola. Este chat quedó vinculado como conductor${placaTxt ? ' de ' + placaTxt : ''}.\n\n` +
+      avisoDatosConductor(responsable, versionTerminos(env)) +
+      '\n\nPara autorizar y empezar a enviar fotos, responda /acepto', SIN_FORMATO);
+  }
+  return 'vinculado';
 }
 
 // ── Pendientes: fotos que no se pudieron procesar ─────────
@@ -243,6 +580,10 @@ async function registrarPendiente(env, p) {
 // Al abandonar un pendiente se avisa al grupo una vez (los reintentos intermedios no avisan, para no llenarlo de mensajes)
 async function avisarAbandono(env, fila, motivo) {
   if (!env.TELEGRAM_BOT_TOKEN || !fila.chat_id || /^sin_placa/.test(String(motivo || ''))) return;
+  if (!esProduccion(env)) {
+    await sendMessage(env.TELEGRAM_BOT_TOKEN, fila.chat_id, avisoFotoNoLeida('abandonada'), SIN_FORMATO);
+    return;
+  }
   await sendMessage(env.TELEGRAM_BOT_TOKEN, fila.chat_id,
     `No pude procesar una foto enviada antes (${String(motivo || '').slice(0, 80)}). Se intentó varias veces; revísela en el dashboard o envíela de nuevo.`, SIN_FORMATO);
 }
@@ -361,21 +702,26 @@ export async function reintentarPendientes(env, { limite = 3, id = null } = {}) 
 // ── Procesar foto/documento ───────────────────────────────
 // Descarga el archivo, lo guarda en R2 y lo entrega a procesarDocumento. Lo que se rompa después queda registrado
 // como pendiente (con el archivo en R2) y avisado al grupo: nada se pierde en silencio.
-async function handleMedia(env, chatId, fileId, fileName, mimeType, usuario, vehiculo, mediaGroupId, fechaMensaje) {
+async function handleMedia(env, chatId, fileId, fileName, mimeType, usuario, vehiculo, mediaGroupId, fechaMensaje, chat = {}) {
   const token = env.TELEGRAM_BOT_TOKEN;
   const t0 = Date.now();
   await sendChatAction(token, chatId, 'typing');
+  // Fuera de producción los avisos de fallo dicen cómo volver a tomar la foto (el motivo técnico queda en el log)
+  const guiado = !esProduccion(env);
+  const fallo = (caso, original) => (guiado
+    ? sendMessage(token, chatId, avisoFotoNoLeida(caso), SIN_FORMATO)
+    : sendMessage(token, chatId, original));
 
   let b64, resolvedMime, r2Key;
   try {
     const fileInfo = await tgRequest(token, 'getFile', { file_id: fileId });
-    if (!fileInfo.ok) { await sendMessage(token, chatId, '❌ No pude obtener el archivo.'); return; }
+    if (!fileInfo.ok) { await fallo('no_recibida', '❌ No pude obtener el archivo.'); return; }
     const filePath = fileInfo.result.file_path;
     const fileSize = fileInfo.result.file_size || 0;
-    if (fileSize > 20 * 1024 * 1024) { await sendMessage(token, chatId, '❌ Archivo > 20MB.'); return; }
+    if (fileSize > 20 * 1024 * 1024) { await fallo('pesada', '❌ Archivo > 20MB.'); return; }
 
     const fileRes = await fetch(`${TG_API}/file/bot${token}/${filePath}`);
-    if (!fileRes.ok) { await sendMessage(token, chatId, '❌ Error descargando.'); return; }
+    if (!fileRes.ok) { await fallo('no_recibida', '❌ Error descargando.'); return; }
     const buf = await fileRes.arrayBuffer();
     b64 = aBase64(buf);
 
@@ -392,12 +738,15 @@ async function handleMedia(env, chatId, fileId, fileName, mimeType, usuario, veh
     await env.BUCKET.put(r2Key, buf, { httpMetadata: { contentType: resolvedMime } });
   } catch (err) {
     console.error('[TG] no pude descargar/guardar la foto:', err && err.stack || err);
-    await sendMessage(token, chatId, `No pude descargar o guardar esta foto (${motivoCorto(err)}). Envíela de nuevo, por favor.`, SIN_FORMATO);
+    await sendMessage(token, chatId, guiado
+      ? avisoFotoNoLeida('no_recibida')
+      : `No pude descargar o guardar esta foto (${motivoCorto(err)}). Envíela de nuevo, por favor.`, SIN_FORMATO);
     return;
   }
 
   try {
-    await procesarDocumento(env, { chatId, b64, mime: resolvedMime, r2Key, usuario, vehiculo, mediaGroupId, fechaMensaje, t0 });
+    await procesarDocumento(env, { chatId, b64, mime: resolvedMime, r2Key, usuario, vehiculo, mediaGroupId, fechaMensaje, t0,
+      nombreChat: chat.nombreChat || null, rolChat: chat.rolChat || null });
   } catch (err) {
     // Antes esto solo iba a console.error y el grupo nunca se enteraba
     console.error('[TG] error procesando', r2Key, err && err.stack || err);
@@ -406,21 +755,23 @@ async function handleMedia(env, chatId, fileId, fileName, mimeType, usuario, veh
       chatId, vehiculo, usuario, mediaGroupId, fechaMensaje, r2Key, mime: resolvedMime,
       tipo: (err && err.tipoPendiente) || 'documento', motivo
     });
-    await sendMessage(token, chatId,
-      `No pude procesar esta foto (${motivo}). Quedó guardada y se reintenta sola ${CUANDO_REINTENTA}; si no aparece en el dashboard avise.`, SIN_FORMATO);
+    await sendMessage(token, chatId, guiado
+      ? avisoFotoNoLeida('guardada')
+      : `No pude procesar esta foto (${motivo}). Quedó guardada y se reintenta sola ${CUANDO_REINTENTA}; si no aparece en el dashboard avise.`, SIN_FORMATO);
   }
 }
 
 // Todo lo que pasa DESPUÉS de tener el archivo descargado y guardado en R2: OCR y registro como planilla,
 // manifiesto (viaje) o gasto.
-// doc = { chatId, b64, mime, r2Key, usuario, vehiculo, mediaGroupId, fechaMensaje, t0, reintento?, tipoConocido? }
+// doc = { chatId, b64, mime, r2Key, usuario, vehiculo, mediaGroupId, fechaMensaje, t0, reintento?, tipoConocido?, nombreChat?, rolChat? }
+// nombreChat / rolChat: nombre y rol del chat vinculado por /start (tabla telegram_chats); sin ellos, todo como siempre.
 // En un reintento (reintento: true) el auto-enlace de recibos↔viaje es SOLO por media_group_id: las ventanas de 3 minutos miden
 // contra "ahora" (la hora del reintento), no contra la hora en que el conductor mandó la foto, y enlazarían documentos de días distintos.
 // tipoConocido: 'manifiesto' → ya se sabe que lo es (pendiente de un manifiesto) y no se vuelve a clasificar.
 // Devuelve { ok: true, resultado } o { pendiente: true, motivo } (este último ya quedó registrado en ocr_pendientes).
 // Si algo se rompe lanza, con err.tipoPendiente: quien llama lo registra como pendiente.
 export async function procesarDocumento(env, doc) {
-  const { chatId, b64, mime, r2Key, usuario, vehiculo, mediaGroupId, fechaMensaje, reintento, tipoConocido } = doc;
+  const { chatId, b64, mime, r2Key, usuario, vehiculo, mediaGroupId, fechaMensaje, reintento, tipoConocido, nombreChat, rolChat } = doc;
   const token = env.TELEGRAM_BOT_TOKEN;
   const t0 = doc.t0 || Date.now();
   const deadline = t0 + PRESUPUESTO_MS;   // los agentes recortan cada llamada a lo que quede de presupuesto
@@ -438,12 +789,17 @@ export async function procesarDocumento(env, doc) {
   try {
     if (!reintento) await sendChatAction(token, chatId, 'typing');
 
+    // Flota de esta instancia. Sin PLACAS_FUENTE="d1" es la lista fija de siempre y a los agentes no se les pasa nada nuevo
+    const flotaD1 = placasDesdeD1(env);
+    const placas = await placasFlota(env);
+    const optsPlacas = flotaD1 ? { placas } : {};
+
     // Con Gemini caído la clasificación cae a Sonnet y, si era un manifiesto, la extracción sería una 2.ª llamada a Claude EN SERIE
     // bajo el mismo presupuesto de 26 s: no cabe de forma fiable. Por eso, en cuanto la clasificación cae a Sonnet porque Gemini
     // falló, la extracción arranca EN PARALELO (directo a Claude: Gemini acaba de fallar con esta foto). Si el documento no resulta
     // ser un manifiesto ese resultado se descarta (cuesta una llamada de más, solo mientras Gemini está caído)
     const extraerManifiesto = (extra = {}) =>
-      runManifiestoAgent(b64, mime, env.GEMINI_API_KEY, env.DB, { anthropicKey: env.ANTHROPIC_API_KEY, deadline, ...extra });
+      runManifiestoAgent(b64, mime, env.GEMINI_API_KEY, env.DB, { anthropicKey: env.ANTHROPIC_API_KEY, deadline, ...optsPlacas, ...extra });
     let manAdelantado = null;
     const alCaerASonnet = () => {
       if (!env.ANTHROPIC_API_KEY || manAdelantado) return;
@@ -454,12 +810,13 @@ export async function procesarDocumento(env, doc) {
     // Un reintento de un manifiesto ya clasificado no gasta otra llamada de clasificación (ni su tiempo)
     const preview = tipoConocido === 'manifiesto'
       ? { es_manifiesto: true }
-      : await runOcrAgent(b64, mime, env, env.DB, { deadline, alCaerASonnet });
+      : await runOcrAgent(b64, mime, env, env.DB, { deadline, alCaerASonnet, ...optsPlacas });
 
     if (preview.error) {
       const detalle = preview._ocr_fallback_reason ? `${preview.error} (gemini: ${preview._ocr_fallback_reason})` : preview.error;
-      return await dejarPendiente('documento', detalle,
-        `❌ Error procesando: ${preview.error}\n\nLa foto quedó guardada y se reintenta sola ${CUANDO_REINTENTA}; si no aparece en el dashboard avise.`);
+      return await dejarPendiente('documento', detalle, esProduccion(env)
+        ? `❌ Error procesando: ${preview.error}\n\nLa foto quedó guardada y se reintenta sola ${CUANDO_REINTENTA}; si no aparece en el dashboard avise.`
+        : avisoFotoNoLeida('guardada'));
     }
 
     // ── Hoja de control / consolidado del conductor → NO es gasto (evita doble conteo) ──
@@ -476,13 +833,14 @@ export async function procesarDocumento(env, doc) {
       tipo = 'manifiesto';
       const man = await (manAdelantado || extraerManifiesto());
       if (man.error) {
-        return await dejarPendiente('manifiesto', man.error,
-          `❌ Error procesando manifiesto: ${man.error}\n\nQuedó guardado y se reintenta solo ${CUANDO_REINTENTA}; si no aparece en el dashboard avise.`);
+        return await dejarPendiente('manifiesto', man.error, esProduccion(env)
+          ? `❌ Error procesando manifiesto: ${man.error}\n\nQuedó guardado y se reintenta solo ${CUANDO_REINTENTA}; si no aparece en el dashboard avise.`
+          : avisoFotoNoLeida('guardada'));
       }
 
       let vehManifiesto = vehiculo || man.vehiculo || null;
       // Reclasificación por placa: si el manifiesto muestra una placa válida distinta a la del grupo, gana la del manifiesto
-      if (man.vehiculo && VEHICULOS_FLOTA.includes(man.vehiculo) && vehiculo && man.vehiculo !== vehiculo) {
+      if (man.vehiculo && placas.includes(man.vehiculo) && vehiculo && man.vehiculo !== vehiculo) {
         vehManifiesto = man.vehiculo;
       }
 
@@ -558,13 +916,13 @@ export async function procesarDocumento(env, doc) {
                ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
         RETURNING id, numero
       `).bind(
-        man.numero_manifiesto, fechaViaje, vehManifiesto, man.conductor,
+        man.numero_manifiesto, fechaViaje, vehManifiesto, man.conductor || (rolChat === 'conductor' && nombreChat ? nombreChat : null),
         man.origen, man.destino, man.empresa_carga, man.empresa_carga_nit,
         man.remitente, man.destinatario, man.mercancia, man.peso_kg || 0,
         man.valor_flete || 0, man.retefuente || 0, man.reteica || 0,
         man.otras_retenciones || 0, man.valor_neto || 0,
         man.anticipo || 0, man.saldo_a_cobrar || 0,
-        r2Key, 'telegram',
+        r2Key, nombreChat || 'telegram',
         estadoViaje, notas.length ? notas.join(' · ') : null, mediaGroupId || null
       ).first();
       const numeroViaje = insV.numero;
@@ -617,10 +975,12 @@ export async function procesarDocumento(env, doc) {
     // Vehículo: si el documento muestra una placa VÁLIDA de la flota distinta a la del grupo,
     // gana la placa del documento (reclasificación por placa). Si no hay placa, se queda la del grupo.
     const vehGrupo = vehiculo || null;
-    const vehDoc = preview.vehiculo_detectado || preview.vehiculo || null;
+    const vehLeido = preview.vehiculo_detectado || preview.vehiculo || null;
+    // Con la flota en D1 solo cuenta una placa de la flota (una placa ajena no reclasifica ni se guarda como vehículo)
+    const vehDoc = flotaD1 ? (placas.includes(vehLeido) ? vehLeido : null) : vehLeido;
     let vehFinal = vehGrupo || vehDoc || null;
     let reclasNota = '';
-    if (vehDoc && VEHICULOS_FLOTA.includes(vehDoc) && vehGrupo && vehDoc !== vehGrupo) {
+    if (vehDoc && placas.includes(vehDoc) && vehGrupo && vehDoc !== vehGrupo) {
       vehFinal = vehDoc;
       reclasNota = ` · reclasificado por placa (grupo ${vehGrupo} → ${vehDoc})`;
     }
@@ -706,57 +1066,97 @@ export async function handleTelegramUpdate(update, env) {
   const mediaGroupId = msg.media_group_id || null;
   const fechaMensaje = fechaBogota(msg.date);   // fecha del mensaje en Colombia: respaldo si el manifiesto no trae fecha legible
 
+  // /start <código> (o /start@bot <código> en un grupo): vincula este chat con el rol y la placa del código.
+  // Sin las tablas del piloto (producción) vincularChat devuelve 'no_disponible' y todo sigue como siempre.
+  const mVinculo = typeof msg.text === 'string' ? /^\/start(?:@\w+)?\s+([A-Za-z0-9_-]{8,64})$/.exec(msg.text.trim()) : null;
+  if (mVinculo && env.TELEGRAM_BOT_TOKEN && chatId != null) {
+    const res = await vincularChat(env, chatId, mVinculo[1], msg.from, msg.chat);
+    if (res !== 'no_disponible') return;
+  }
+
   const auth = await autorizar(env.DB, env, chatId);
   if (!auth.ok) {
     if (env.TELEGRAM_BOT_TOKEN && chatId) {
-      await sendMessage(env.TELEGRAM_BOT_TOKEN, chatId,
-        `🔒 Este chat no está vinculado a ningún vehículo.\n\nchat_id: \`${chatId}\`\n\nPídele al admin que lo configure en el dashboard → Vehículos.`);
+      // Fuera de producción el mensaje dice qué hacer según quién escribe (el dueño saca su enlace en el tablero)
+      if (!esProduccion(env)) await sendMessage(env.TELEGRAM_BOT_TOKEN, chatId, textoChatSinVincular(urlTablero(env)), SIN_FORMATO);
+      else await sendMessage(env.TELEGRAM_BOT_TOKEN, chatId, placasDesdeD1(env)
+        ? `🔒 Este chat no está vinculado.\n\nAbra el enlace de vinculación que le envió el dueño de la flota.`
+        : `🔒 Este chat no está vinculado a ningún vehículo.\n\nchat_id: \`${chatId}\`\n\nPídele al admin que lo configure en el dashboard → Vehículos.`);
     }
+    return;
+  }
+
+  // Chat vinculado por /start: el registro lleva el nombre con el que el dueño lo inscribió
+  const usuarioReg = auth.nombreChat ? String(auth.nombreChat).slice(0, 80) : usuario;
+  const datosChat = { nombreChat: auth.nombreChat || null, rolChat: auth.rol || null };
+
+  // El conductor debe autorizar el tratamiento de sus datos (/acepto) antes de que se procese nada suyo
+  if (auth.pendienteAceptar && ((msg.photo && msg.photo.length > 0) || msg.document)) {
+    await sendMessage(env.TELEGRAM_BOT_TOKEN, chatId,
+      'Antes de registrar sus documentos necesito su autorización para el tratamiento de datos. Lea el aviso de arriba y responda /acepto. Luego envíe la foto de nuevo.',
+      SIN_FORMATO);
     return;
   }
 
   if (msg.photo && msg.photo.length > 0) {
     const photo = msg.photo[msg.photo.length - 1];
-    await handleMedia(env, chatId, photo.file_id, null, 'image/jpeg', usuario, auth.vehiculo, mediaGroupId, fechaMensaje);
+    await handleMedia(env, chatId, photo.file_id, null, 'image/jpeg', usuarioReg, auth.vehiculo, mediaGroupId, fechaMensaje, datosChat);
     return;
   }
 
   if (msg.document) {
     const doc = msg.document;
     const mime = doc.mime_type || 'application/octet-stream';
-    if (mime.startsWith('image/') || mime === 'application/pdf') {
-      await handleMedia(env, chatId, doc.file_id, doc.file_name, mime, usuario, auth.vehiculo, mediaGroupId, fechaMensaje);
+    // Fuera de producción, lista cerrada: image/svg+xml y otros formatos con contenido activo no se guardan ni se sirven.
+    // Producción acepta lo mismo de siempre (cualquier image/* o PDF).
+    const aceptado = esProduccion(env)
+      ? (mime.startsWith('image/') || mime === 'application/pdf')
+      : TIPOS_DOCUMENTO.has(mime.toLowerCase());
+    if (aceptado) {
+      await handleMedia(env, chatId, doc.file_id, doc.file_name, mime, usuarioReg, auth.vehiculo, mediaGroupId, fechaMensaje, datosChat);
       return;
     }
-    await sendMessage(env.TELEGRAM_BOT_TOKEN, chatId, `❌ Envía imagen (JPG/PNG) o PDF.`);
+    if (!esProduccion(env)) await sendMessage(env.TELEGRAM_BOT_TOKEN, chatId, avisoFotoNoLeida('tipo'), SIN_FORMATO);
+    else await sendMessage(env.TELEGRAM_BOT_TOKEN, chatId, `❌ Envía imagen (JPG/PNG) o PDF.`);
     return;
   }
 
   if (msg.text) {
     if (msg.text.startsWith('/')) await handleCommand(env, chatId, msg.text, fromName, auth);
+    else if (!esProduccion(env)) {
+      await sendMessage(env.TELEGRAM_BOT_TOKEN, chatId,
+        'Mándeme la foto del manifiesto o del recibo. Escriba /ayuda para ver cómo tomarla.', SIN_FORMATO);
+    }
     else await sendMessage(env.TELEGRAM_BOT_TOKEN, chatId, `Envíame una *foto del gasto* o usa /help`);
     return;
   }
 }
 
 // ── Webhook utils ─────────────────────────────────────────
+// Respaldo SOLO para producción. Otras instancias deben definir WORKER_URL: sin ella no se registra ni se repara el webhook
+// (si no, el cron re-apuntaría el bot de esa instancia al Worker de producción)
 const WEBHOOK_BASE = 'https://tractomulas-gastos.ddropero.workers.dev';
 
 export async function setupWebhook(env, webhookUrl, secretToken) {
-  return tgRequest(env.TELEGRAM_BOT_TOKEN, 'setWebhook', {
+  const r = await tgRequest(env.TELEGRAM_BOT_TOKEN, 'setWebhook', {
     url: webhookUrl, secret_token: secretToken,
     allowed_updates: ['message', 'edited_message'], drop_pending_updates: true
   });
+  // Fuera de producción se registra además el menú de comandos del bot (en producción la respuesta es la de siempre)
+  if (r && r.ok && !esProduccion(env)) r.comandos = await registrarComandos(env);
+  return r;
 }
 
 export async function checkWebhookHealth(env) {
   const token = env.TELEGRAM_BOT_TOKEN;
   if (!token) return { healthy: false, reason: 'no_token' };
+  const base = urlBase(env, WEBHOOK_BASE);
+  if (!base) return { healthy: false, reason: 'sin_worker_url' };
   try {
     const info = await tgRequest(token, 'getWebhookInfo', {});
     if (!info?.ok) return { healthy: false, reason: 'api_error', detail: info };
     const r = info.result || {};
-    const expectedUrl = `${env.WORKER_URL || WEBHOOK_BASE}/api/telegram/webhook`;
+    const expectedUrl = `${base}/api/telegram/webhook`;
     if (r.url !== expectedUrl) return { healthy: false, reason: 'wrong_url', current: r.url, expected: expectedUrl };
     if (r.last_error_date && (Date.now()/1000 - r.last_error_date) < 3600)
       return { healthy: false, reason: 'recent_error', last_error_message: r.last_error_message };
@@ -768,13 +1168,16 @@ export async function checkWebhookHealth(env) {
 export async function healWebhook(env) {
   const token = env.TELEGRAM_BOT_TOKEN;
   const webhookSecret = env.TELEGRAM_WEBHOOK_SECRET;
-  const webhookUrl = `${env.WORKER_URL || WEBHOOK_BASE}/api/telegram/webhook`;
+  const base = urlBase(env, WEBHOOK_BASE);
+  if (!base) return { ok: false, error: 'sin_worker_url' };
+  const webhookUrl = `${base}/api/telegram/webhook`;
   if (!token || !webhookSecret) return { ok: false, error: 'missing_secrets' };
   try {
     const result = await tgRequest(token, 'setWebhook', {
       url: webhookUrl, secret_token: webhookSecret,
       allowed_updates: ['message', 'edited_message'], drop_pending_updates: false
     });
+    if (result?.ok && !esProduccion(env)) return { ok: true, result, comandos: await registrarComandos(env) };
     return { ok: !!result?.ok, result };
   } catch (err) { return { ok: false, error: err.message }; }
 }

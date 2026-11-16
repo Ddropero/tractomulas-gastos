@@ -1395,6 +1395,64 @@
     .logo { padding-left: 0; }
     .preview-panel, .oblig-card { box-shadow: 4px 4px 0 var(--border) !important; }
   }
+
+  /* Funciones apagadas por configuración (ver aplicarFunciones) */
+  html.sin-facturacion [data-funcion="facturacion"],
+  html.sin-pagos-finandina [data-funcion="pagos_finandina"],
+  html.sin-recurrentes [data-funcion="recurrentes"],
+  html.sin-pdf-fiscal [data-funcion="pdf_fiscal"],
+  html.sin-correo-terceros [data-funcion="correo_terceros"] { display: none !important; }
+  .vinc-btn { background: var(--accent2); color: var(--text); border: 2px solid var(--border); padding: 8px 12px; font-family: var(--sans); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; cursor: pointer; box-shadow: 3px 3px 0 var(--border); }
+  .vinc-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .vinc-enlace { width: 100%; padding: 8px 10px; border: 2px solid var(--border); font-family: var(--mono); font-size: 11px; background: var(--surface); color: var(--text); margin: 8px 0 6px; }
+
+  /* ── Primeros pasos y Ayuda (solo fuera de producción; ocultos mientras no los encienda iniciarGuia) ── */
+  #guia-panel { display: none; grid-column: 1/-1; background: var(--surface); border-bottom: 4px solid var(--border); padding: 14px 16px; min-width: 0; }
+  html.con-guia #guia-panel { display: block; }
+  html.con-guia .app { grid-template-rows: 56px auto 1fr; }
+  .guia-cab { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .guia-titulo { font-family: var(--serif); font-size: 17px; text-transform: uppercase; margin: 0; color: var(--text); }
+  .guia-avance-txt { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--text); }
+  .guia-cab-btns { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
+  .guia-barra { height: 12px; border: 2px solid var(--border); background: var(--bg); margin: 10px 0 4px; }
+  .guia-barra > div { height: 100%; width: 0; background: var(--accent); transition: width 0.3s ease; }
+  .guia-lista { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
+  .guia-paso { border: 2px solid var(--border); padding: 10px 12px; background: var(--surface); min-width: 0; }
+  .guia-paso.hecho { opacity: 0.7; }
+  .guia-paso-fila { display: flex; gap: 10px; align-items: flex-start; }
+  .guia-casilla { flex: 0 0 22px; width: 22px; height: 22px; border: 2px solid var(--border); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; line-height: 1; background: var(--surface); color: var(--text); }
+  .guia-paso.hecho .guia-casilla { background: var(--accent2); color: #0A0A0A; }
+  .guia-paso-txt { flex: 1; min-width: 0; }
+  .guia-paso-titulo { font-family: var(--sans); font-weight: 700; font-size: 14px; color: var(--text); overflow-wrap: anywhere; }
+  .guia-paso.hecho .guia-paso-titulo { text-decoration: line-through; }
+  .guia-paso-detalle { font-size: 12px; color: var(--muted); margin-top: 2px; line-height: 1.4; overflow-wrap: anywhere; }
+  .guia-paso-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; align-items: center; }
+  .guia-btn { background: var(--accent2); color: #0A0A0A; border: 2px solid var(--border); padding: 9px 12px; min-height: 38px; font-family: var(--sans); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; cursor: pointer; box-shadow: 3px 3px 0 var(--border); text-decoration: none; display: inline-flex; align-items: center; }
+  .guia-btn.suave { background: var(--surface); color: var(--text); box-shadow: none; }
+  .guia-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .guia-como { margin-top: 8px; border-left: 4px solid var(--accent2); padding: 6px 10px; font-size: 12px; line-height: 1.5; color: var(--text); background: var(--bg); }
+  .guia-como ol { margin: 0; padding-left: 18px; }
+  .guia-res { margin-top: 8px; font-size: 12px; color: var(--text); min-width: 0; }
+  .guia-res select { padding: 8px; border: 2px solid var(--border); font-family: var(--mono); font-size: 12px; background: var(--surface); color: var(--text); }
+  .guia-nota { font-size: 11px; color: var(--muted); line-height: 1.4; }
+  .guia-listo { font-family: var(--sans); font-weight: 700; font-size: 14px; margin: 10px 0 0; color: var(--text); }
+  #ayuda-fab { display: none; position: fixed; right: 16px; bottom: 76px; z-index: 90; background: var(--accent); color: #fff; border: 3px solid var(--border); padding: 10px 14px; min-height: 42px; font-family: var(--sans); font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; cursor: pointer; box-shadow: 4px 4px 0 var(--border); }
+  html[data-theme="light"] #ayuda-fab { color: #0A0A0A; }
+  html.con-ayuda #ayuda-fab { display: block; }
+  #nav-ayuda-sec { display: none; }
+  html.con-ayuda #nav-ayuda-sec { display: block; }
+  #ayuda-overlay { display: none; position: fixed; inset: 0; background: rgba(10,10,10,0.9); z-index: 240; justify-content: center; align-items: flex-start; padding: 16px; overflow-y: auto; }
+  .ayuda-caja { background: var(--surface); max-width: 620px; width: 100%; padding: 18px 16px; border: 4px solid var(--border); box-shadow: 6px 6px 0 var(--border); color: var(--text); }
+  .ayuda-caja h3 { font-family: var(--sans); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 16px 0 6px; }
+  .ayuda-lista { list-style: none; margin: 0; padding: 0; font-size: 13px; line-height: 1.45; }
+  .ayuda-lista li { padding: 7px 0; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+  .ayuda-lista li:last-child { border-bottom: none; }
+  @media (min-width: 769px) {
+    #guia-panel { padding: 16px 24px; }
+    .guia-lista { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); align-items: start; }
+    #ayuda-overlay { padding: 40px 20px; }
+    .ayuda-caja { padding: 24px; }
+  }
 </style>
 </head>
 <body>
@@ -1408,9 +1466,22 @@
       <strong id="header-total">$0</strong>
       acumulado período
     </div>
-    <button id="header-pago-btn" onclick="iniciarPagoMasivo()" style="background:var(--accent);color:#fff;border:3px solid var(--border);padding:8px 16px;cursor:pointer;font-family:var(--sans);font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:0.08em;box-shadow:4px 4px 0 var(--border);margin-left:14px;">💸 Pago masivo</button>
+    <button id="header-pago-btn" data-funcion="pagos_finandina" onclick="iniciarPagoMasivo()" style="background:var(--accent);color:#fff;border:3px solid var(--border);padding:8px 16px;cursor:pointer;font-family:var(--sans);font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:0.08em;box-shadow:4px 4px 0 var(--border);margin-left:14px;">💸 Pago masivo</button>
     <div class="user-badge active" id="usuario-btn" onclick="toggleUsuario()" style="margin-left:14px;">david</div>
   </header>
+
+  <!-- Primeros pasos: solo se muestra si GET /api/primeros-pasos responde visible: true (ver iniciarGuia) -->
+  <section id="guia-panel" aria-label="Primeros pasos">
+    <div class="guia-cab">
+      <h2 class="guia-titulo">Primeros pasos</h2>
+      <span class="guia-avance-txt" id="guia-avance-txt"></span>
+      <div class="guia-cab-btns">
+        <button type="button" class="guia-btn suave" id="guia-btn-actualizar" onclick="cargarGuia(true)">Actualizar</button>
+        <button type="button" class="guia-btn suave" id="guia-btn-ocultar" onclick="ocultarGuia()">Ocultar guía</button>
+      </div>
+    </div>
+    <div id="guia-cuerpo"></div>
+  </section>
 
   <!-- Sidebar -->
   <nav>
@@ -1419,7 +1490,7 @@
         📊 Centro de control
       </div>
     </div>
-    <div class="nav-section" style="background:var(--accent);color:#fff;border-bottom:4px solid var(--border);padding:14px 12px !important;">
+    <div class="nav-section" data-funcion="pagos_finandina" style="background:var(--accent);color:#fff;border-bottom:4px solid var(--border);padding:14px 12px !important;">
       <div class="nav-label" style="color:#fff !important;margin-bottom:10px !important;font-size:11px !important;">💸 Pagos Finandina</div>
       <div class="nav-item" onclick="iniciarPagoMasivo()" style="background:#fff;color:var(--text) !important;font-weight:700;padding:10px 12px !important;margin-bottom:6px;border:2px solid var(--border);box-shadow:3px 3px 0 var(--border);text-transform:uppercase;letter-spacing:0.05em;font-size:11px;">
         Pago masivo (desde gastos)
@@ -1468,35 +1539,35 @@
       <div class="nav-item" onclick="exportarResumen()">
         <div class="nav-dot"></div> Exportar RESUMEN (año)
       </div>
-      <div class="nav-item" onclick="abrirPrepararFactura()">
+      <div class="nav-item" data-funcion="facturacion" onclick="abrirPrepararFactura()">
         <div class="nav-dot"></div> Elaborar factura
       </div>
-      <div class="nav-item" onclick="probarAliaddo()">
+      <div class="nav-item" data-funcion="facturacion" onclick="probarAliaddo()">
         <div class="nav-dot"></div> Probar Aliaddo
       </div>
-      <div class="nav-item" onclick="abrirClientesAliaddo()">
+      <div class="nav-item" data-funcion="facturacion" onclick="abrirClientesAliaddo()">
         <div class="nav-dot"></div> Clientes Aliaddo
       </div>
-      <div class="nav-item" onclick="probarSoporte()">
+      <div class="nav-item" data-funcion="facturacion" onclick="probarSoporte()">
         <div class="nav-dot"></div> Doc. soporte (probar 1)
       </div>
-      <div class="nav-item" onclick="generarSoportesAliaddo()">
+      <div class="nav-item" data-funcion="facturacion" onclick="generarSoportesAliaddo()">
         <div class="nav-dot"></div> Documentos equivalentes
       </div>
-      <div class="nav-item" onclick="abrirCuentasAliaddo()">
+      <div class="nav-item" data-funcion="facturacion" onclick="abrirCuentasAliaddo()">
         <div class="nav-dot"></div> Plan de cuentas (PUC)
       </div>
       <div class="nav-item" onclick="abrirConciliacionDian()" style="color:var(--warn);font-weight:700">
         <div class="nav-dot" style="background:var(--warn)"></div> 🔍 Conciliar DIAN combustible
       </div>
     </div>
-    <div class="nav-section" id="recurrentes-section" style="display:none">
+    <div class="nav-section" id="recurrentes-section" data-funcion="recurrentes" style="display:none">
       <div class="nav-label">Recurrentes</div>
       <div id="recurrentes-warn"></div>
     </div>
     <div class="nav-section">
       <div class="nav-label">Exportar</div>
-      <div class="nav-item" onclick="exportarPDF()" style="color:var(--accent)"><div class="nav-dot"></div> PDF Fiscal</div>
+      <div class="nav-item" data-funcion="pdf_fiscal" onclick="exportarPDF()" style="color:var(--accent)"><div class="nav-dot"></div> PDF Fiscal</div>
       <div class="nav-item" onclick="exportarExcel()"><div class="nav-dot"></div> Excel</div>
       <div class="nav-item" onclick="exportarCSV()"><div class="nav-dot"></div> CSV</div>
     </div>
@@ -1532,6 +1603,15 @@
       </label>
       <div class="nav-item" onclick="toggleTheme()" style="cursor:pointer;gap:8px;">
         <div class="nav-dot"></div> <span id="theme-label">Modo noche</span>
+      </div>
+    </div>
+    <div class="nav-section" id="nav-ayuda-sec">
+      <div class="nav-label">Ayuda</div>
+      <div class="nav-item" onclick="mostrarGuia()" style="cursor:pointer;">
+        <div class="nav-dot" style="background:var(--accent2)"></div> Ver guía de primeros pasos
+      </div>
+      <div class="nav-item" onclick="abrirAyuda()" style="cursor:pointer;">
+        <div class="nav-dot" style="background:var(--accent)"></div> Ayuda
       </div>
     </div>
     <div class="nav-section">
@@ -1573,7 +1653,7 @@
     </div>
 
     <!-- Banner pago masivo Finandina -->
-    <div id="pago-bar" style="display:none;background:#1a2e1a;border-bottom:1px solid var(--accent);padding:10px 24px;display:none;align-items:center;gap:14px;">
+    <div id="pago-bar" data-funcion="pagos_finandina" style="display:none;background:#1a2e1a;border-bottom:1px solid var(--accent);padding:10px 24px;display:none;align-items:center;gap:14px;">
       <span style="font-size:11px;color:var(--accent);font-weight:500;">PAGO MASIVO FINANDINA</span>
       <span id="pago-bar-count" style="font-size:12px;color:var(--text)">0 seleccionados</span>
       <strong id="pago-bar-total" style="color:var(--accent);font-size:14px">$0</strong>
@@ -1781,7 +1861,7 @@
     <div class="oblig-panel" id="viajes-panel">
       <div class="oblig-header">
         <h2 id="viajes-title">Viajes / Ingresos</h2>
-        <div class="oblig-tabs">
+        <div class="oblig-tabs" id="veh-bar-viajes">
           <div class="veh-pill active" onclick="filtrarVehiculoViajes(null, this)">🚛 Todos</div>
           <div class="veh-pill" onclick="filtrarVehiculoViajes('STT115', this)">STT 115</div>
           <div class="veh-pill" onclick="filtrarVehiculoViajes('STT121', this)">STT 121</div>
@@ -1817,7 +1897,7 @@
     <div class="oblig-panel" id="auditoria-panel">
       <div class="oblig-header">
         <h2 id="auditoria-title">Auditoría de planilla</h2>
-        <div class="oblig-tabs">
+        <div class="oblig-tabs" id="veh-bar-auditoria">
           <div class="veh-pill active" onclick="filtrarVehiculoAuditoria('STT115', this)">STT 115</div>
           <div class="veh-pill" onclick="filtrarVehiculoAuditoria('STT121', this)">STT 121</div>
           <div class="veh-pill" onclick="filtrarVehiculoAuditoria('UPO707', this)">UPO 707</div>
@@ -2054,7 +2134,7 @@
   </div>
 </div>
 
-<div id="pago-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;justify-content:center;align-items:flex-start;padding:40px 20px;overflow-y:auto;">
+<div id="pago-overlay" data-funcion="pagos_finandina" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;justify-content:center;align-items:flex-start;padding:40px 20px;overflow-y:auto;">
   <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;max-width:900px;width:100%;padding:24px;">
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
       <h2 style="font-family:var(--serif);font-weight:300;font-size:18px;color:var(--accent);margin:0">Pago masivo Finandina</h2>
@@ -2139,7 +2219,7 @@
 </div>
 
 <!-- Modal Pago directo a proveedores -->
-<div id="pago-directo-overlay" style="display:none;position:fixed;inset:0;background:rgba(10,10,10,0.9);z-index:200;justify-content:center;align-items:flex-start;padding:40px 20px;overflow-y:auto;">
+<div id="pago-directo-overlay" data-funcion="pagos_finandina" style="display:none;position:fixed;inset:0;background:rgba(10,10,10,0.9);z-index:200;justify-content:center;align-items:flex-start;padding:40px 20px;overflow-y:auto;">
   <div style="background:var(--surface);max-width:1100px;width:100%;padding:24px;border:4px solid var(--border);box-shadow:10px 10px 0 var(--border);">
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
       <h2 style="font-family:var(--serif);font-weight:900;font-size:22px;color:var(--text);margin:0;text-transform:uppercase;letter-spacing:-0.03em;">💸 Pago directo a proveedores</h2>
@@ -2163,6 +2243,19 @@
       En el grupo de Telegram del vehículo, escribe <strong style="color:#fff;">/id</strong> para ver el chat_id, y pégalo aquí. Cualquier foto enviada a ese grupo se registra automáticamente para este vehículo.
     </div>
     <div id="veh-content"><div style="text-align:center;padding:40px;color:var(--muted)">Cargando vehículos...</div></div>
+    <div id="veh-telegram" style="display:none;margin-top:8px;"></div>
+  </div>
+</div>
+
+<!-- Ayuda (solo fuera de producción) -->
+<button type="button" id="ayuda-fab" onclick="abrirAyuda()" aria-haspopup="dialog">? Ayuda</button>
+<div id="ayuda-overlay" role="dialog" aria-modal="true" aria-labelledby="ayuda-titulo" onclick="if(event.target===this)cerrarAyuda()">
+  <div class="ayuda-caja">
+    <div style="display:flex;align-items:center;gap:12px;">
+      <h2 id="ayuda-titulo" style="font-family:var(--serif);font-size:20px;margin:0;text-transform:uppercase;">Ayuda</h2>
+      <button type="button" class="guia-btn suave" style="margin-left:auto" onclick="cerrarAyuda()">Cerrar</button>
+    </div>
+    <div id="ayuda-cuerpo"></div>
   </div>
 </div>
 
@@ -2190,7 +2283,7 @@
 </div>
 
 <!-- Modal Datos Factura (Aliaddo) -->
-<div id="factura-overlay" style="display:none;position:fixed;inset:0;background:rgba(10,10,10,0.9);z-index:235;justify-content:center;align-items:flex-start;padding:40px 20px;overflow-y:auto;" onclick="if(event.target===this)cerrarDatosFactura()">
+<div id="factura-overlay" data-funcion="facturacion" style="display:none;position:fixed;inset:0;background:rgba(10,10,10,0.9);z-index:235;justify-content:center;align-items:flex-start;padding:40px 20px;overflow-y:auto;" onclick="if(event.target===this)cerrarDatosFactura()">
   <div style="background:var(--surface);max-width:560px;width:100%;padding:24px;border:4px solid var(--border);box-shadow:10px 10px 0 var(--border);">
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
       <h2 style="font-family:var(--serif);font-weight:900;font-size:20px;color:var(--text);margin:0;text-transform:uppercase;letter-spacing:-0.03em;">🧾 Datos factura (Aliaddo)</h2>
@@ -2220,9 +2313,63 @@
 
 <script>
 // ============================================================
-// CONFIG — cambiar por URL real del Worker
+// CONFIG — URL del Worker
+// Producción se sirve desde Pages y dominios propios: usa la URL fija de su API.
 // ============================================================
-const WORKER_URL = 'https://tractomulas-gastos.ddropero.workers.dev';
+const API_PRODUCCION = 'https://tractomulas-gastos.ddropero.workers.dev';
+// Lista cerrada de hosts de producción (Pages y dominios propios de la instancia de producción).
+// Cualquier otro host habla SOLO con su propio origen: una instancia nueva nunca envía datos a la API de producción.
+// Un dominio nuevo de producción hay que agregarlo aquí.
+const HOSTS_PRODUCCION = ['flota.davidduque.com', 'tractomulas.davidduque.com'];
+const WORKER_URL = (location.protocol === 'file:' || HOSTS_PRODUCCION.includes(location.hostname) || location.hostname.endsWith('.pages.dev'))
+  ? API_PRODUCCION : location.origin;
+const ES_HOST_PRODUCCION = WORKER_URL === API_PRODUCCION;
+
+// Respaldo de la flota: los valores de hoy de la instancia de producción.
+// Solo se usan si /api/config-publica no responde. En cualquier otra
+// instancia el respaldo es vacío y todo sale de la configuración.
+const VEH_DEFAULT = ES_HOST_PRODUCCION ? [
+  { placa: 'STT115', nombre: 'STT 115' },
+  { placa: 'STT121', nombre: 'STT 121' },
+  { placa: 'UPO707', nombre: 'UPO 707' },
+] : [];
+const EMISOR_DEFAULT = ES_HOST_PRODUCCION ? 'DOCE DOCENAS SAS — NIT 900768035-9' : '';
+// Colores por posición; los tres primeros son los de siempre.
+const VEH_PALETA = ['#a0d0f0', '#f0d0a0', '#b8f0a0', '#f0b0a0', '#d0b0f0', '#a0e8e0', '#f0a8d0', '#d8d890'];
+const FUNCIONES_UI = ['facturacion', 'pagos_finandina', 'recurrentes', 'pdf_fiscal', 'correo_terceros'];
+
+window.FLOTA = {
+  entorno: ES_HOST_PRODUCCION ? 'production' : 'piloto',
+  vehiculos: VEH_DEFAULT,
+  // Fuera de producción, mientras no llegue la configuración, lo sensible queda apagado.
+  funciones: ES_HOST_PRODUCCION ? {} : Object.fromEntries(FUNCIONES_UI.map(n => [n, false])),
+  empresa: {},
+};
+
+function tokenHeader() {
+  let t = null;
+  try { t = localStorage.getItem('session_token'); } catch {}
+  return t ? { 'Authorization': `Bearer ${t}` } : {};
+}
+
+async function cargarConfig() {
+  try {
+    // Con tope de espera: una petición colgada no puede dejar la página sin arrancar
+    const tope = (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) ? AbortSignal.timeout(6000) : undefined;
+    const r = await fetch(`${WORKER_URL}/api/config-publica`, { headers: tokenHeader(), signal: tope });
+    if (r.ok) return await r.json();
+  } catch {}
+  return null; // sin respuesta: se conserva lo que hoy está fijo
+}
+
+function funcionActiva(nombre) {
+  const f = (window.FLOTA && window.FLOTA.funciones) || {};
+  return f[nombre] !== false;
+}
+
+function escHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
 
 // ============================================================
 // Auth: interceptor global de fetch — agrega Authorization
@@ -2232,7 +2379,7 @@ const WORKER_URL = 'https://tractomulas-gastos.ddropero.workers.dev';
   window.fetch = async function(input, init = {}) {
     const urlStr = typeof input === 'string' ? input : (input?.url || '');
     // Solo agregar token a llamadas al Worker
-    if (urlStr.includes('tractomulas-gastos.ddropero.workers.dev')) {
+    if (urlStr.startsWith(WORKER_URL)) {
       const token = localStorage.getItem('session_token');
       if (token) {
         init.headers = { ...(init.headers || {}), 'Authorization': `Bearer ${token}` };
@@ -2240,7 +2387,7 @@ const WORKER_URL = 'https://tractomulas-gastos.ddropero.workers.dev';
     }
     const res = await originalFetch(input, init);
     // Si recibimos 401, limpiar sesión y redirigir
-    if (res.status === 401 && urlStr.includes('tractomulas-gastos.ddropero.workers.dev')
+    if (res.status === 401 && urlStr.startsWith(WORKER_URL)
         && !urlStr.includes('/api/auth/')) {
       localStorage.removeItem('session_token');
       window.location.href = '/login.html';
@@ -2312,10 +2459,16 @@ const fmtFecha = s => s ? s.slice(0,10) : '—';
 // Init
 // ============================================================
 document.addEventListener('DOMContentLoaded', async () => {
+  // Fuera del host de producción no se muestran las placas fijas del HTML
+  if (!ES_HOST_PRODUCCION) { aplicarVehiculos([]); aplicarFunciones(window.FLOTA.funciones); }
+
   // ── Auth gate ──
   const token = localStorage.getItem('session_token');
   if (!token) { window.location.href = '/login.html'; return; }
 
+  // La configuración se pide en paralelo con la sesión para no demorar la carga
+  const cfgPromesa = cargarConfig();
+  let sesion = null;
   try {
     const res = await fetch(`${WORKER_URL}/api/auth/me`);
     if (!res.ok) {
@@ -2324,6 +2477,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
     const data = await res.json();
+    sesion = data;
     // Mostrar usuario en el header si existe el elemento
     const userEl = document.getElementById('auth-user');
     if (userEl && data.user) userEl.textContent = data.user.nombre || data.user.email;
@@ -2332,9 +2486,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     return;
   }
 
+  const cfg = await cfgPromesa;
+  aplicarConfig(cfg, sesion);
+  // Guía de primeros pasos y ayuda: no se espera ni puede frenar el arranque; en producción no hace nada
+  try { iniciarGuia(cfg); } catch {}
+
   setupDrop();
   cargarGastos();
-  loadRecurrentes();
+  if (funcionActiva('recurrentes')) loadRecurrentes();
   loadEstadoMes();
   loadObligBadge();
   loadProvBadge();
@@ -2701,6 +2860,14 @@ async function cargarGastos() {
     renderVehStats(data.por_vehiculo || {});
     aplicarFiltros();
   } catch {
+    if (window.FLOTA.entorno !== 'production') {
+      // Fuera de producción no se muestran datos de demostración
+      gastos = [];
+      aplicarFiltros();
+      renderStatsLocal();
+      renderVehStats({});
+      return;
+    }
     // Demo offline
     gastos = DEMO_DATA;
     aplicarFiltros();
@@ -2746,9 +2913,10 @@ function renderTabla() {
   const tbody = document.getElementById('gastos-body');
 
   if (!gastosFilt.length) {
+    const sinNada = window.FLOTA.entorno !== 'production' && !gastos.length && !busqueda && !vehActivo && !catActiva;
     tbody.innerHTML = `<tr><td colspan="12"><div class="empty">
       <div class="empty-icon">◈</div>
-      <div class="empty-text">Sin registros en este período</div>
+      <div class="empty-text">${sinNada ? 'Aún no hay gastos. Envíe la primera foto por Telegram' : 'Sin registros en este período'}</div>
     </div></td></tr>`;
     return;
   }
@@ -2760,11 +2928,11 @@ function renderTabla() {
     const isPaid  = g.pagado_via === 'finandina';
     const checked = pagoSeleccion.has(g.id) ? 'checked' : '';
     const soporteLink = g.archivo_r2
-      ? `<a href="${WORKER_URL}/api/soporte/${g.archivo_r2}" target="_blank" onclick="event.stopPropagation()" style="color:var(--accent);text-decoration:none;" title="Ver soporte">📎</a>`
+      ? `<a href="${WORKER_URL}/api/soporte/${escHtml(g.archivo_r2)}" target="_blank" onclick="event.stopPropagation()" style="color:var(--accent);text-decoration:none;" title="Ver soporte">📎</a>`
       : '<span style="color:var(--border)">—</span>';
     const checkbox = isPaid
-      ? `<span title="Ya pagado vía Finandina" style="color:var(--accent);font-size:13px">✓</span>`
-      : `<input type="checkbox" class="pago-check" data-id="${g.id}" data-total="${g.total}" ${checked} onclick="event.stopPropagation();togglePagoSel(${g.id}, ${g.total}, this.checked)" style="accent-color:var(--accent);width:14px;height:14px;cursor:pointer;">`;
+      ? `<span data-funcion="pagos_finandina" title="Ya pagado vía Finandina" style="color:var(--accent);font-size:13px">✓</span>`
+      : `<input type="checkbox" class="pago-check" data-funcion="pagos_finandina" data-id="${g.id}" data-total="${g.total}" ${checked} onclick="event.stopPropagation();togglePagoSel(${g.id}, ${g.total}, this.checked)" style="accent-color:var(--accent);width:14px;height:14px;cursor:pointer;">`;
     const isRec = !!g.es_recurrente;
     const recBtn = `<button class="rec-toggle ${isRec ? 'on' : ''}" onclick="event.stopPropagation();toggleRecurrente(${g.id},${isRec ? 0 : 1},this)" title="${isRec ? 'Quitar marca de recurrente' : 'Marcar como recurrente'}" style="background:${isRec ? 'var(--accent2)' : 'transparent'};color:${isRec ? 'var(--text)' : 'var(--muted)'};border:2px solid ${isRec ? 'var(--border)' : 'var(--border)'};padding:0;width:24px;height:24px;cursor:pointer;font-size:13px;font-weight:700;line-height:1;">🔁</button>`;
     return `<tr class="${isNeg ? 'nc' : ''} ${isRec ? 'rec-row' : ''}" onclick="verDetalle(${g.id})">
@@ -2772,10 +2940,10 @@ function renderTabla() {
       <td style="text-align:center;padding:0 4px">${recBtn}</td>
       <td class="num">${g.numero || '—'}</td>
       <td class="fecha">${fmtFecha(g.fecha)}</td>
-      <td class="veh">${g.vehiculo ? `<span style="background:${vehColor(g.vehiculo)}22;color:${vehColor(g.vehiculo)};border:2px solid var(--border);padding:2px 7px;font-family:var(--mono);font-weight:700;font-size:10px;letter-spacing:0.04em;white-space:nowrap;">${vehLabel(g.vehiculo)}</span>` : '<span style="color:var(--muted)">—</span>'}</td>
-      <td class="proveedor">${g.proveedor_nombre || '—'}</td>
-      <td class="concepto">${g.concepto || '—'}</td>
-      <td class="cat"><span style="background:${catColor}22;color:${catColor}">${g.categoria || '—'}</span></td>
+      <td class="veh">${g.vehiculo ? `<span style="background:${vehColor(g.vehiculo)}22;color:${vehColor(g.vehiculo)};border:2px solid var(--border);padding:2px 7px;font-family:var(--mono);font-weight:700;font-size:10px;letter-spacing:0.04em;white-space:nowrap;">${escHtml(vehLabel(g.vehiculo))}</span>` : '<span style="color:var(--muted)">—</span>'}</td>
+      <td class="proveedor">${escHtml(g.proveedor_nombre || '—')}</td>
+      <td class="concepto">${escHtml(g.concepto || '—')}</td>
+      <td class="cat"><span style="background:${catColor}22;color:${catColor}">${escHtml(g.categoria || '—')}</span></td>
       <td style="color:var(--muted)">${g.iva ? fmt(g.iva) : '—'}</td>
       <td class="total ${isNeg ? 'neg' : 'pos'}">${fmt(g.total)}</td>
       <td style="text-align:center">${soporteLink}</td>
@@ -2826,11 +2994,523 @@ function getCatColor(cat) {
 }
 
 // Etiquetas de vehículo
-const VEH_LABELS = { 'STT115': 'STT 115', 'STT121': 'STT 121', 'UPO707': 'UPO 707' };
+const VEH_LABELS = {};
+const VEH_COLORES = {};
+VEH_DEFAULT.forEach((v, i) => { VEH_LABELS[v.placa] = v.nombre; VEH_COLORES[v.placa] = VEH_PALETA[i % VEH_PALETA.length]; });
 function vehLabel(v) { return VEH_LABELS[v] || v || '—'; }
 function vehColor(v) {
-  const map = { 'STT115': '#a0d0f0', 'STT121': '#f0d0a0', 'UPO707': '#b8f0a0' };
-  return map[v] || '#888';
+  return VEH_COLORES[v] || '#888';
+}
+
+// Regenera todo lo que depende de la lista de vehículos: selects, pastillas
+// de filtro, etiquetas, colores, orden de tarjetas y vehículo de auditoría.
+function aplicarVehiculos(lista) {
+  const vistos = new Set();
+  const vehs = (Array.isArray(lista) ? lista : [])
+    .map(v => ({ ...v, placa: String((v && v.placa) || '').toUpperCase().replace(/[^A-Z0-9]/g, '') }))
+    .filter(v => v.placa && !vistos.has(v.placa) && vistos.add(v.placa))
+    .map(v => ({ ...v, nombre: String(v.nombre || v.placa) }));
+
+  VEH_DEFAULT.length = 0;
+  vehs.forEach(v => VEH_DEFAULT.push(v));
+  Object.keys(VEH_LABELS).forEach(k => delete VEH_LABELS[k]);
+  Object.keys(VEH_COLORES).forEach(k => delete VEH_COLORES[k]);
+  vehs.forEach((v, i) => { VEH_LABELS[v.placa] = v.nombre; VEH_COLORES[v.placa] = VEH_PALETA[i % VEH_PALETA.length]; });
+  CENTRO_VEHICULOS.length = 0;
+  vehs.forEach(v => CENTRO_VEHICULOS.push(v.placa));
+  if (window.FLOTA) window.FLOTA.vehiculos = VEH_DEFAULT;
+
+  const placas = vehs.map(v => v.placa);
+  if (vehActivo && !placas.includes(vehActivo)) vehActivo = null;
+  if (vehViajes && !placas.includes(vehViajes)) vehViajes = null;
+  if (!placas.includes(vehAuditoria)) vehAuditoria = placas[0] || '';
+
+  // Select del preview de gasto
+  const sel = document.getElementById('prev-vehiculo');
+  if (sel) {
+    const actual = sel.value;
+    const opcion = (valor, texto) => { const o = document.createElement('option'); o.value = valor; o.textContent = texto; return o; };
+    sel.replaceChildren(opcion('', '— Sin asignar —'), ...vehs.map(v => opcion(v.placa, v.nombre)));
+    sel.value = placas.includes(actual) ? actual : '';
+  }
+
+  // Pastillas de filtro
+  const pintar = (id, conTodos, activo, alHacerClic) => {
+    const bar = document.getElementById(id);
+    if (!bar) return;
+    const pastilla = (placa, texto) => {
+      const p = document.createElement('div');
+      p.className = 'veh-pill' + (placa === activo ? ' active' : '');
+      p.textContent = texto;
+      p.onclick = () => alHacerClic(placa, p);
+      return p;
+    };
+    const nodos = vehs.map(v => pastilla(v.placa, v.nombre));
+    if (conTodos) nodos.unshift(pastilla(null, '🚛 Todos'));
+    bar.replaceChildren(...nodos);
+  };
+  pintar('veh-bar', true, vehActivo, filtrarVehiculo);
+  pintar('veh-bar-viajes', true, vehViajes, filtrarVehiculoViajes);
+  pintar('veh-bar-auditoria', false, vehAuditoria, filtrarVehiculoAuditoria);
+
+  const ej = document.getElementById('oblig-nombre');
+  if (ej) ej.placeholder = vehs.length ? `Ej: SOAT ${vehs[0].nombre}` : 'Ej: SOAT de la mula';
+}
+
+// Oculta lo que la instancia tiene apagado (los elementos llevan data-funcion)
+function aplicarFunciones(f) {
+  const root = document.documentElement;
+  FUNCIONES_UI.forEach(n => root.classList.toggle('sin-' + n.replace(/_/g, '-'), !!f && f[n] === false));
+}
+
+// Aplica lo que devuelve /api/config-publica. Con cfg = null no cambia nada:
+// queda lo que está fijo (producción) o vacío y apagado (otra instancia).
+function aplicarConfig(cfg, sesion) {
+  const F = window.FLOTA;
+  if (cfg && cfg.entorno) F.entorno = cfg.entorno;
+  const funciones = (cfg && cfg.funciones) || (sesion && sesion.funciones) || null;
+  if (funciones) F.funciones = funciones;
+  const empresa = (cfg && cfg.empresa) || (sesion && sesion.empresa) || null;
+  if (empresa) F.empresa = empresa;
+  if (cfg && Array.isArray(cfg.vehiculos) && cfg.vehiculos.length > 0) aplicarVehiculos(cfg.vehiculos);
+  aplicarFunciones(F.funciones);
+
+  if (F.entorno !== 'production') {
+    // Sin selector david/andrea: el usuario es el de la sesión
+    const nombre = (sesion && sesion.user && (sesion.user.nombre || sesion.user.email)) || '';
+    if (nombre) usuario = nombre;
+    const badge = document.getElementById('usuario-btn');
+    if (badge) {
+      badge.textContent = nombre || '—';
+      badge.onclick = null;
+      badge.removeAttribute('onclick');
+      badge.style.cursor = 'default';
+    }
+    const stat = document.getElementById('stat-user');
+    if (stat) stat.textContent = nombre || '—';
+  }
+}
+
+function emisorTexto() {
+  const e = (window.FLOTA && window.FLOTA.empresa) || {};
+  if (e.nombre && e.nit) return `${e.nombre} — NIT ${e.nit}`;
+  return EMISOR_DEFAULT || e.nombre || '(emisor)';
+}
+
+// ============================================================
+// Primeros pasos y Ayuda
+// Solo fuera de producción (iniciarGuia no hace nada en producción). El panel aparece únicamente si
+// GET /api/primeros-pasos responde visible: true; si la llamada falla, el tablero queda como siempre.
+// Todo lo que llega de la API se pinta con escHtml.
+// ============================================================
+// "Cómo se hace": texto fijo por id de paso
+const GUIA_COMO = {
+  telegram_dueno: [
+    'Toque el botón de este paso para sacar su enlace y luego "Abrir Telegram".',
+    'En Telegram toque "Iniciar". Listo: ese chat queda a su nombre.',
+    'Si ya tiene un enlace sin usar (el que le salió al inscribirse), use ese. Si saca otro, el anterior deja de servir.',
+    'Si no tiene Telegram, instálelo primero en el celular. Es gratis.'
+  ],
+  conductor: [
+    'Si ya le mandó a su conductor el enlace que le salió al inscribirse, no saque otro: ese sigue sirviendo hasta que venza.',
+    'Si no lo tiene, toque el botón de este paso para sacar uno. Ojo: al sacar uno nuevo, el anterior deja de servir.',
+    'Mándeselo por WhatsApp. Él lo abre en su celular y toca "Iniciar".',
+    'El conductor responde /acepto para autorizar el uso de sus datos. Desde ahí ya puede mandar fotos.',
+    'Si usted mismo maneja la mula, toque "Yo mismo manejo la mula" y este paso queda listo.'
+  ],
+  primer_manifiesto: [
+    'Ponga el manifiesto de carga sobre una mesa, con buena luz y sin sombras.',
+    'Tome la foto de frente y que salga la hoja completa: número, placa, flete y anticipo.',
+    'Envíela al chat de Telegram. En un momento aparece como viaje en "Ver viajes".'
+  ],
+  primer_gasto: [
+    'Tome la foto del recibo: combustible, peaje, parqueadero, llantas, lo que sea.',
+    'Que se lea el valor y la fecha. Una foto por recibo.',
+    'Envíela al chat de Telegram, o súbala aquí arriba en "Subir factura o comprobante".'
+  ],
+  extractos: [
+    'Entre a la página o a la aplicación de su banco y baje los extractos en PDF, mes por mes.',
+    'Bájelos de la cuenta donde le pagan las transportadoras.',
+    'Envíeselos a quien le dio la invitación. Con eso le decimos qué transportadora le debe y cuánto.'
+  ]
+};
+
+// Qué es cada sección del tablero. Solo se listan las que esta instancia tiene a la vista.
+const AYUDA_SECCIONES = [
+  { t: 'Subir factura o comprobante', d: 'Suba la foto o el PDF de un recibo y queda guardado como gasto.', sel: '#drop-zone' },
+  { t: 'Centro de control', d: 'El resumen del mes: ingresos, gastos, lo que deja cada mula y los saldos por cobrar.', sel: '#nav-centro-control' },
+  { t: 'Vistas', d: 'La lista de gastos: todos, los que faltan por revisar y los deducibles.' },
+  { t: 'Categorías', d: 'En qué se va la plata: combustible, peajes, mantenimiento y lo demás.', sel: '#cat-nav' },
+  { t: 'Vehículos / Telegram', d: 'Sus mulas y los chats de Telegram que pueden mandar fotos. Aquí saca enlaces nuevos.' },
+  { t: 'Subir manifiesto', d: 'Suba la foto del manifiesto de carga y queda como viaje, con flete, anticipo y saldo.' },
+  { t: 'Importar peajes', d: 'Cargue el archivo de peajes electrónicos para no subirlos uno por uno.' },
+  { t: 'Ver viajes', d: 'Cada viaje con su flete, sus gastos, lo que dejó y si la transportadora ya pagó.', sel: '#nav-viajes-ver' },
+  { t: 'Auditoría planilla', d: 'Compara lo que reportó el conductor con los recibos que llegaron.', sel: '#nav-auditoria-ver' },
+  { t: 'Exportar', d: 'Baje sus gastos y viajes en Excel o CSV para usted o para su contador.' },
+  { t: 'PDF Fiscal', d: 'Un informe en PDF de los gastos del período.', fn: 'pdf_fiscal' },
+  { t: 'Comparativo', d: 'Compara un mes con otro para ver si gastó más o menos.' },
+  { t: 'Obligaciones', d: 'Los pagos fijos que no se le pueden pasar: seguros, impuestos, cuotas.', sel: '#nav-oblig-pend' },
+  { t: 'Recurrentes', d: 'Gastos que se repiten cada mes y todavía no han llegado.', fn: 'recurrentes' },
+  { t: 'Facturación', d: 'Elabore la factura de un viaje y los documentos soporte.', fn: 'facturacion' },
+  { t: 'Pagos', d: 'Arme el archivo para pagarles a varios proveedores de una vez.', fn: 'pagos_finandina' }
+];
+
+const guia = { activa: false, datos: null, cargando: false, oculta: false, ultima: 0, abiertos: new Set(), enlaces: Object.create(null), soporte: null };
+
+function iniciarGuia(cfg) {
+  if (ES_HOST_PRODUCCION || !window.FLOTA || window.FLOTA.entorno === 'production') return;
+  if (guia.activa) return;
+  guia.activa = true;
+  guia.soporte = (cfg && cfg.soporte) || null;
+  document.documentElement.classList.add('con-ayuda');
+  // Sin sondeo: solo se vuelve a consultar al regresar a la pestaña o con el botón Actualizar
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && !guia.oculta && Date.now() - guia.ultima > 4000) cargarGuia(false);
+  });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') cerrarAyuda(); });
+  cargarGuia(false);
+}
+
+function guiaVisible(si) {
+  document.documentElement.classList.toggle('con-guia', !!si);
+}
+
+async function cargarGuia(manual) {
+  if (!guia.activa || guia.cargando) return false;
+  guia.cargando = true;
+  guia.ultima = Date.now();
+  const btn = document.getElementById('guia-btn-actualizar');
+  if (manual && btn) { btn.disabled = true; btn.textContent = 'Actualizando...'; }
+  let visible = false;
+  try {
+    const tope = (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) ? AbortSignal.timeout(8000) : undefined;
+    const res = await fetch(`${WORKER_URL}/api/primeros-pasos`, { signal: tope });
+    const data = res.ok ? await res.json() : null;
+    if (data && data.visible === true && Array.isArray(data.pasos)) {
+      guia.datos = data;
+      guia.oculta = false;
+      pintarGuia();
+      guiaVisible(true);
+      visible = true;
+    } else if (data && data.visible === false) {
+      guia.oculta = true;
+      guiaVisible(false);
+    } else if (manual) {
+      showToast('No se pudo actualizar la guía. Intente de nuevo.', 'err');
+    }
+    // Sin respuesta válida: se deja lo que hubiera (nada, en la primera carga)
+  } catch {
+    if (manual) showToast('No se pudo actualizar la guía. Revise su conexión.', 'err');
+  } finally {
+    guia.cargando = false;
+    if (btn) { btn.disabled = false; btn.textContent = 'Actualizar'; }
+  }
+  return visible;
+}
+
+async function guiaPost(cuerpo) {
+  try {
+    const res = await fetch(`${WORKER_URL}/api/primeros-pasos`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(cuerpo)
+    });
+    const data = await res.json().catch(() => ({}));
+    return res.ok && data && data.ok === true;
+  } catch {
+    return false;
+  }
+}
+
+// Solo https o una ruta de este mismo sitio; cualquier otra cosa no se enlaza
+function guiaUrlSegura(u) {
+  const s = String(u == null ? '' : u).trim();
+  if (/^https:\/\/[^\s"'<>]+$/i.test(s)) return s;
+  if (/^\/(?!\/)[^\s"'<>\\]*$/.test(s)) return s;
+  return null;
+}
+
+function guiaRolDePaso(paso) {
+  return paso && paso.id === 'conductor' ? 'conductor' : 'dueno';
+}
+
+function pintarGuia() {
+  const d = guia.datos;
+  const cuerpo = document.getElementById('guia-cuerpo');
+  const avance = document.getElementById('guia-avance-txt');
+  if (!d || !cuerpo) return;
+  const pasos = d.pasos.filter(p => p && typeof p === 'object' && typeof p.id === 'string');
+  const hechosLista = pasos.filter(p => p.hecho === true).length;
+  const entero = n => Number.isInteger(n) && n >= 0;
+  const total = entero(d.total) && d.total > 0 ? d.total : pasos.length;
+  const hechos = Math.min(total, entero(d.completados) ? d.completados : hechosLista);
+  const pct = total > 0 ? Math.round((hechos / total) * 100) : 0;
+  if (avance) avance.textContent = `${hechos} de ${total}`;
+
+  const barra = `<div class="guia-barra" role="progressbar" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${hechos}" aria-label="Avance de los primeros pasos"><div style="width:${pct}%"></div></div>`;
+
+  // Salida que no es la principal ("Yo mismo manejo la mula", o deshacer algo que se marcó a mano)
+  const botonSecundario = (p, i) => {
+    const s = (p.accion_secundaria && typeof p.accion_secundaria === 'object') ? p.accion_secundaria : null;
+    if (!s || (s.tipo !== 'marcar' && s.tipo !== 'desmarcar') || !s.texto) return '';
+    return `<button type="button" class="guia-btn suave" data-guia-sec="${i}" data-guia-sec-tipo="${s.tipo}">${escHtml(s.texto)}</button>`;
+  };
+  const conectarSecundarios = () => cuerpo.querySelectorAll('[data-guia-sec]').forEach(b => {
+    const paso = pasos[Number(b.dataset.guiaSec)];
+    if (paso) b.onclick = () => guiaMarcar(paso, b, b.dataset.guiaSecTipo === 'desmarcar' ? 'desmarcar' : 'marcar');
+  });
+
+  if (pasos.length > 0 && hechosLista === pasos.length) {
+    const deshacer = pasos.map(botonSecundario).join('');
+    cuerpo.innerHTML = barra + '<p class="guia-listo">Listo. Ya tiene todo andando: siga mandando fotos de recibos y manifiestos y aquí ve qué transportadora le debe y cuánto le deja cada mula.</p>'
+      + (deshacer ? `<div class="guia-nota" style="margin-top:10px;">¿Marcó algo por error?</div><div class="guia-paso-btns">${deshacer}</div>` : '');
+    conectarSecundarios();
+    return;
+  }
+
+  cuerpo.innerHTML = barra + '<ul class="guia-lista">' + pasos.map((p, i) => {
+    const hecho = p.hecho === true;
+    const a = (p.accion && typeof p.accion === 'object') ? p.accion : {};
+    let boton = '';
+    if (!hecho) {
+      if (a.tipo === 'enlace') {
+        const url = guiaUrlSegura(a.url);
+        if (url) {
+          const externo = /^https:/i.test(url);
+          boton = `<a class="guia-btn" href="${escHtml(url)}"${externo ? ' target="_blank" rel="noopener noreferrer"' : ''}>${escHtml(a.texto || 'Abrir')}</a>`;
+        }
+      } else if (a.tipo === 'vinculo_telegram') {
+        boton = `<button type="button" class="guia-btn" data-guia-vinculo>${escHtml(a.texto || 'Sacar enlace')}</button>`;
+      } else if (a.tipo === 'marcar') {
+        boton = `<button type="button" class="guia-btn" data-guia-marcar>${escHtml(a.texto || 'Ya lo hice')}</button>`;
+      }
+    }
+    const como = Object.prototype.hasOwnProperty.call(GUIA_COMO, p.id) ? GUIA_COMO[p.id] : null;
+    const abierto = guia.abiertos.has(p.id);
+    return `<li class="guia-paso${hecho ? ' hecho' : ''}" data-i="${i}">
+      <div class="guia-paso-fila">
+        <span class="guia-casilla" role="img" aria-label="${hecho ? 'Hecho' : 'Pendiente'}">${hecho ? '&#10003;' : ''}</span>
+        <div class="guia-paso-txt">
+          <div class="guia-paso-titulo">${escHtml(p.titulo || '')}</div>
+          <div class="guia-paso-detalle">${escHtml(p.detalle || '')}</div>
+          <div class="guia-paso-btns">
+            ${boton}
+            ${botonSecundario(p, i)}
+            ${como ? `<button type="button" class="guia-btn suave" data-guia-como aria-expanded="${abierto ? 'true' : 'false'}">Cómo se hace</button>` : ''}
+          </div>
+          ${como ? `<div class="guia-como"${abierto ? '' : ' hidden'}><ol>${como.map(l => `<li>${escHtml(l)}</li>`).join('')}</ol></div>` : ''}
+          <div class="guia-res"></div>
+        </div>
+      </div>
+    </li>`;
+  }).join('') + '</ul>';
+
+  cuerpo.querySelectorAll('.guia-paso').forEach(li => {
+    const paso = pasos[Number(li.dataset.i)];
+    if (!paso) return;
+    const res = li.querySelector('.guia-res');
+    const bComo = li.querySelector('[data-guia-como]');
+    if (bComo) bComo.onclick = () => {
+      const caja = li.querySelector('.guia-como');
+      const abrir = caja.hidden;
+      caja.hidden = !abrir;
+      bComo.setAttribute('aria-expanded', abrir ? 'true' : 'false');
+      if (abrir) guia.abiertos.add(paso.id); else guia.abiertos.delete(paso.id);
+    };
+    const bVinc = li.querySelector('[data-guia-vinculo]');
+    if (bVinc) bVinc.onclick = () => guiaPedirVinculo(paso, bVinc, res);
+    const bMarcar = li.querySelector('[data-guia-marcar]');
+    if (bMarcar) bMarcar.onclick = () => guiaMarcar(paso, bMarcar, 'marcar');
+    // Un enlace ya generado sigue a la vista aunque el panel se actualice (solo se muestra una vez)
+    if (paso.hecho === true) delete guia.enlaces[paso.id];
+    else if (guia.enlaces[paso.id]) guiaPintarEnlace(res, guia.enlaces[paso.id]);
+  });
+  conectarSecundarios();
+}
+
+async function guiaMarcar(paso, btn, accion) {
+  const texto = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Guardando...';
+  const ok = await guiaPost({ accion: accion === 'desmarcar' ? 'desmarcar' : 'marcar', id: paso.id });
+  if (!ok) {
+    btn.disabled = false; btn.textContent = texto;
+    showToast('No se pudo guardar. Intente de nuevo.', 'err');
+    return;
+  }
+  await cargarGuia(false);
+}
+
+// Enlace sin usar y vigente de ese rol y placa (GET /api/telegram/chats, campo pendientes).
+// Devuelve el pendiente, null si no hay, o undefined si no se pudo consultar.
+async function guiaEnlacePendiente(rol, placa) {
+  try {
+    const r = await fetch(`${WORKER_URL}/api/telegram/chats`);
+    if (!r.ok) return undefined;
+    const d = await r.json();
+    const lista = Array.isArray(d && d.pendientes) ? d.pendientes : [];
+    return lista.find(p => p && p.rol === rol && (p.placa || null) === (placa || null)) || null;
+  } catch {
+    return undefined;
+  }
+}
+
+// Pide un enlace nuevo a la ruta de vinculación que ya existe (POST /api/vinculacion-telegram).
+// Pedirlo anula el enlace anterior sin usar de ese rol y placa: si hay uno, primero se pregunta.
+async function guiaPedirVinculo(paso, btn, res, placaElegida) {
+  const rol = guiaRolDePaso(paso);
+  const placas = ((window.FLOTA && window.FLOTA.vehiculos) || []).map(v => v.placa).filter(Boolean);
+  let placa = placaElegida || null;
+  if (!placa && placas.length === 1) placa = placas[0];
+  if (rol === 'conductor' && !placa) {
+    if (!placas.length) {
+      res.innerHTML = '<span class="guia-nota">Primero registre su mula en el menú "Vehículos / Telegram".</span>';
+      return;
+    }
+    // Varias mulas: se pregunta de cuál es el conductor
+    res.innerHTML = `<label class="guia-nota" style="display:block;margin-bottom:6px;">¿De cuál mula es el conductor?</label>
+      <div class="guia-paso-btns" style="margin-top:0">
+        <select aria-label="Mula del conductor">${placas.map(p => `<option value="${escHtml(p)}">${escHtml(vehLabel(p))}</option>`).join('')}</select>
+        <button type="button" class="guia-btn">Sacar enlace</button>
+      </div>`;
+    const b2 = res.querySelector('button');
+    b2.onclick = () => guiaPedirVinculo(paso, b2, res, res.querySelector('select').value);
+    return;
+  }
+
+  const texto = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Un momento...';
+  try {
+    const previo = await guiaEnlacePendiente(rol, placa);
+    const hayPrevio = previo || (previo === undefined && paso.accion && paso.accion.reemplaza === true);
+    if (hayPrevio) {
+      const vence = previo && previo.expira_en ? ` (vence el ${fmtFechaHoraCO(previo.expira_en)})` : '';
+      const aviso = `Ya hay un enlace sin usar${vence}.\n\nSi saca uno nuevo, el anterior deja de servir`
+        + (rol === 'conductor' ? ': si ya se lo mandó a su conductor, a él no le va a abrir.' : '.')
+        + '\n\n¿Sacar uno nuevo?';
+      if (!confirm(aviso)) return;
+    }
+    const body = { rol };
+    if (placa) body.placa = placa;
+    const r = await fetch(`${WORKER_URL}/api/vinculacion-telegram`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const data = await r.json().catch(() => ({}));
+    const v = data && data.vinculo;
+    if (!r.ok || !v || !/^https:\/\/t\.me\/[A-Za-z0-9_]+\?start=[A-Za-z0-9_-]+$/.test(v.enlace || '')) {
+      res.innerHTML = `<span class="guia-nota" style="color:var(--warn)">${escHtml((data && data.error) || 'No se pudo sacar el enlace. Intente de nuevo.')}</span>`;
+      return;
+    }
+    guia.enlaces[paso.id] = { rol, placa: placa || null, enlace: v.enlace, expira_en: v.expira_en || null };
+    guiaPintarEnlace(res, guia.enlaces[paso.id]);
+  } catch {
+    res.innerHTML = '<span class="guia-nota" style="color:var(--warn)">No se pudo sacar el enlace. Revise su conexión.</span>';
+  } finally {
+    if (btn.isConnected) { btn.disabled = false; btn.textContent = texto; }
+  }
+}
+
+function guiaPintarEnlace(res, v) {
+  if (!res || !v) return;
+  const esConductor = v.rol === 'conductor';
+  const msj = `Para mandar las fotos de recibos y manifiestos${v.placa ? ' de ' + vehLabel(v.placa) : ''}, abra este enlace en Telegram, toque Iniciar y responda /acepto: ${v.enlace}`;
+  res.innerHTML = `<input class="vinc-enlace" readonly aria-label="Enlace de Telegram" value="${escHtml(v.enlace)}" onclick="this.select()">
+    <div class="guia-paso-btns" style="margin-top:0">
+      ${esConductor
+        ? `<a class="guia-btn" target="_blank" rel="noopener noreferrer" href="https://wa.me/?text=${encodeURIComponent(msj)}">Enviar por WhatsApp</a>`
+        : `<a class="guia-btn" target="_blank" rel="noopener noreferrer" href="${escHtml(v.enlace)}">Abrir Telegram</a>`}
+      <button type="button" class="guia-btn suave" data-copiar>Copiar enlace</button>
+    </div>
+    <div class="guia-nota" style="margin-top:6px;">${esConductor
+      ? 'Este enlace lo abre el conductor en su celular, no usted. '
+      : 'Ábralo en el celular donde tiene Telegram. '}Sirve una sola vez.${v.expira_en ? ' Vence: ' + escHtml(fmtFechaHoraCO(v.expira_en)) + '.' : ''} ${esConductor ? 'Mándelo' : 'Ábralo'} o cópielo ahora: si recarga la página ya no se ve, y si saca otro, este deja de servir. Cuando termine, vuelva aquí y toque Actualizar.</div>`;
+  const bCopiar = res.querySelector('[data-copiar]');
+  bCopiar.onclick = async () => {
+    try { await navigator.clipboard.writeText(v.enlace); bCopiar.textContent = 'Copiado'; }
+    catch { res.querySelector('input').select(); showToast('Seleccione y copie el enlace', 'err'); }
+  };
+}
+
+async function ocultarGuia() {
+  const btn = document.getElementById('guia-btn-ocultar');
+  if (btn) btn.disabled = true;
+  const ok = await guiaPost({ accion: 'ocultar' });
+  if (btn) btn.disabled = false;
+  if (!ok) { showToast('No se pudo ocultar la guía. Intente de nuevo.', 'err'); return; }
+  guia.oculta = true;
+  guiaVisible(false);
+  showToast('Guía oculta. Para verla otra vez: menú Ayuda, "Ver guía de primeros pasos".', 'ok');
+}
+
+async function mostrarGuia() {
+  if (!guia.activa) return;
+  cerrarAyuda();
+  const ok = await guiaPost({ accion: 'mostrar' });
+  if (!ok) { showToast('No se pudo mostrar la guía. Intente de nuevo.', 'err'); return; }
+  guia.oculta = false;
+  const visible = await cargarGuia(false);
+  if (!visible) { showToast('No se pudo cargar la guía. Intente de nuevo.', 'err'); return; }
+  const panel = document.getElementById('guia-panel');
+  if (panel && panel.scrollIntoView) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// Contacto de soporte: solo lo que entregue /api/config-publica (campo soporte). Si no hay, no se inventa nada.
+function ayudaSoporteHtml() {
+  const s = guia.soporte;
+  const lineas = [];
+  if (typeof s === 'string' && s.trim()) {
+    lineas.push(escHtml(s.trim()));
+  } else if (s && typeof s === 'object') {
+    if (s.nombre) lineas.push(escHtml(s.nombre));
+    if (s.texto) lineas.push(escHtml(s.texto));
+    const wa = String(s.whatsapp || '').replace(/\D/g, '');
+    if (wa.length >= 10 && wa.length <= 15) lineas.push(`<a class="guia-btn" target="_blank" rel="noopener noreferrer" href="https://wa.me/${wa}">Escribir por WhatsApp</a>`);
+    const tel = String(s.telefono || s.celular || '').replace(/[^\d+]/g, '');
+    if (/^\+?\d{7,15}$/.test(tel)) lineas.push(`Teléfono: <a href="tel:${escHtml(tel)}" style="color:var(--accent)">${escHtml(tel)}</a>`);
+    const correo = String(s.correo || s.email || '').trim();
+    if (/^[^\s@<>"']+@[^\s@<>"']+\.[^\s@<>"']+$/.test(correo)) lineas.push(`Correo: <a href="mailto:${escHtml(correo)}" style="color:var(--accent)">${escHtml(correo)}</a>`);
+  }
+  if (!lineas.length) return '<li>Escríbale a la persona que le envió la invitación. Ella le ayuda con cualquier duda.</li>';
+  return lineas.map(l => `<li>${l}</li>`).join('');
+}
+
+function abrirAyuda() {
+  if (!guia.activa) return;
+  const ov = document.getElementById('ayuda-overlay');
+  const cuerpo = document.getElementById('ayuda-cuerpo');
+  if (!ov || !cuerpo) return;
+  const secciones = AYUDA_SECCIONES.filter(s => {
+    if (s.fn && !funcionActiva(s.fn)) return false;
+    if (s.sel) {
+      const el = document.querySelector(s.sel);
+      if (!el || el.getClientRects().length === 0) return false;
+    }
+    return true;
+  });
+  cuerpo.innerHTML = `
+    <p style="font-size:13px;line-height:1.5;margin:12px 0 0;">Mande las fotos de recibos y manifiestos por Telegram. Aquí le decimos qué transportadora le debe y cuánto le deja cada mula.</p>
+    <h3>Qué es cada cosa</h3>
+    <ul class="ayuda-lista">${secciones.map(s => `<li><strong>${escHtml(s.t)}.</strong> ${escHtml(s.d)}</li>`).join('')}</ul>
+    <h3>¿Necesita ayuda?</h3>
+    <ul class="ayuda-lista">${ayudaSoporteHtml()}</ul>
+    <div class="guia-paso-btns" style="margin-top:14px;">
+      <button type="button" class="guia-btn" onclick="mostrarGuia()">Ver guía de primeros pasos</button>
+    </div>`;
+  ov.style.display = 'flex';
+}
+
+function cerrarAyuda() {
+  const ov = document.getElementById('ayuda-overlay');
+  if (ov) ov.style.display = 'none';
+}
+
+// Fechas del servidor (UTC, "YYYY-MM-DD HH:MM:SS") en hora de Colombia
+function fmtFechaHoraCO(s) {
+  if (!s) return '—';
+  const d = new Date(String(s).replace(' ', 'T') + (/[zZ]|[+-]\d\d:?\d\d$/.test(s) ? '' : 'Z'));
+  if (isNaN(d)) return String(s);
+  return d.toLocaleString('es-CO', { timeZone: 'America/Bogota', day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
 // ============================================================
@@ -2920,7 +3600,7 @@ function filtrarVehiculo(veh, el) {
 function renderVehStats(porVeh) {
   const el = document.getElementById('veh-stats');
   if (!el) return;
-  const orden = ['STT115', 'STT121', 'UPO707'];
+  const orden = VEH_DEFAULT.map(v => v.placa);
   const entries = orden.filter(k => porVeh[k] !== undefined && porVeh[k] !== null);
   // Incluir cualquier vehículo extra que devuelva el API
   Object.keys(porVeh).forEach(k => { if (!orden.includes(k)) entries.push(k); });
@@ -2928,7 +3608,7 @@ function renderVehStats(porVeh) {
   el.innerHTML = entries.map(k =>
     `<span style="display:flex;align-items:center;gap:5px;">
       <span style="width:9px;height:9px;background:${vehColor(k)};border:2px solid var(--border);"></span>
-      <strong style="color:var(--text);font-family:var(--mono);">${vehLabel(k)}</strong>
+      <strong style="color:var(--text);font-family:var(--mono);">${escHtml(vehLabel(k))}</strong>
       <span style="font-family:var(--mono);">${fmt(porVeh[k] || 0)}</span>
     </span>`
   ).join('');
@@ -3016,7 +3696,7 @@ function renderViajesCards(data) {
   const el = document.getElementById('viajes-cards');
   if (!el) return;
   const porVeh = data.por_vehiculo || {};
-  const orden = ['STT115','STT121','UPO707'];
+  const orden = VEH_DEFAULT.map(v => v.placa);
   const keys = orden.filter(k => porVeh[k]);
   Object.keys(porVeh).forEach(k => { if (!keys.includes(k)) keys.push(k); });
   if (!keys.length) { el.innerHTML = ''; return; }
@@ -3026,7 +3706,7 @@ function renderViajesCards(data) {
     return `<div style="border:3px solid var(--border);box-shadow:5px 5px 0 var(--border);padding:14px 16px;min-width:180px;flex:1;background:var(--surface);">
       <div style="display:flex;align-items:center;gap:7px;margin-bottom:8px;">
         <span style="width:11px;height:11px;background:${vehColor(k)};border:2px solid var(--border);"></span>
-        <strong style="font-family:var(--mono);font-size:14px;color:var(--text);">${vehLabel(k)}</strong>
+        <strong style="font-family:var(--mono);font-size:14px;color:var(--text);">${escHtml(vehLabel(k))}</strong>
       </div>
       <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;">Flete</div>
       <div style="font-family:var(--mono);font-weight:700;font-size:15px;color:var(--accent);margin-bottom:5px;">${fmt(flete)}</div>
@@ -3058,16 +3738,16 @@ function renderTablaViajes() {
       ? `<span class="badge" style="background:#1a3a1a;color:var(--accent)">cobrado</span>`
       : `<button class="btn btn-ghost" style="font-size:10px;padding:4px 8px" onclick="conciliarCobro(${v.id})">Conciliar</button>`;
     const factBadge   = facturado
-      ? `<span class="badge" style="background:#1a3a1a;color:var(--accent)" title="${v.numero_factura||''}">FE ${v.numero_factura||''}</span>`
-      : `<button class="btn btn-primary" style="font-size:10px;padding:4px 8px" onclick="facturarViaje(${v.id})" title="Elaborar la factura electrónica en Aliaddo">Elaborar</button> <button class="btn btn-ghost" style="font-size:10px;padding:3px 6px" onclick="marcarFacturado(${v.id})" title="Registrar N° de factura a mano">✎</button>`;
+      ? `<span class="badge" style="background:#1a3a1a;color:var(--accent)" title="${escHtml(v.numero_factura||'')}">FE ${escHtml(v.numero_factura||'')}</span>`
+      : `<button class="btn btn-primary" data-funcion="facturacion" style="font-size:10px;padding:4px 8px" onclick="facturarViaje(${v.id})" title="Elaborar la factura electrónica en Aliaddo">Elaborar</button> <button class="btn btn-ghost" style="font-size:10px;padding:3px 6px" onclick="marcarFacturado(${v.id})" title="Registrar N° de factura a mano">✎</button>`;
     const vehTag = v.vehiculo
-      ? `<span style="background:${vehColor(v.vehiculo)}22;color:${vehColor(v.vehiculo)};border:2px solid var(--border);padding:2px 7px;font-family:var(--mono);font-weight:700;font-size:10px;white-space:nowrap;">${vehLabel(v.vehiculo)}</span>`
+      ? `<span style="background:${vehColor(v.vehiculo)}22;color:${vehColor(v.vehiculo)};border:2px solid var(--border);padding:2px 7px;font-family:var(--mono);font-weight:700;font-size:10px;white-space:nowrap;">${escHtml(vehLabel(v.vehiculo))}</span>`
       : '<span style="color:var(--muted)">—</span>';
     return `<tr>
       <td class="fecha">${fmtFecha(v.fecha_viaje)}</td>
-      <td class="num">${v.numero_manifiesto || '—'}</td>
+      <td class="num">${escHtml(v.numero_manifiesto || '—')}</td>
       <td>${vehTag}</td>
-      <td>${v.empresa_carga || '—'}</td>
+      <td>${escHtml(v.empresa_carga || '—')}</td>
       <td class="total pos" style="text-align:right">${fmt(v.valor_flete || 0)}</td>
       <td style="text-align:right;color:var(--muted)">${fmt(v.anticipo || 0)}</td>
       <td style="text-align:right;color:var(--muted)">${fmt(v.retefuente || 0)}</td>
@@ -3075,7 +3755,7 @@ function renderTablaViajes() {
       <td style="text-align:right;color:var(--warn)"><button class="btn btn-ghost" style="font-size:11px;padding:4px 8px;color:var(--warn);font-family:var(--mono);font-weight:700" onclick="abrirGastosViaje(${v.id})" title="Ver/asignar gastos del viaje">${fmt(totalGastos)}${v.num_gastos != null ? ` · ${v.num_gastos}` : ''} 🔗</button></td>
       <td style="text-align:right;font-weight:700;color:${utilidad < 0 ? 'var(--warn)' : 'var(--accent)'}">${fmt(utilidad)}</td>
       <td style="text-align:center">${cobroBadge}</td>
-      <td style="text-align:center">${factBadge}<button class="btn btn-ghost" style="font-size:10px;padding:4px 8px;margin-left:4px" onclick="datosFactura(${v.id})" title="Datos para Aliaddo">🧾</button></td>
+      <td style="text-align:center">${factBadge}<button class="btn btn-ghost" data-funcion="facturacion" style="font-size:10px;padding:4px 8px;margin-left:4px" onclick="datosFactura(${v.id})" title="Datos para Aliaddo">🧾</button></td>
     </tr>`;
   }).join('');
   content.innerHTML = `<table style="width:100%"><thead><tr>
@@ -3091,7 +3771,7 @@ function renderTablaViajes() {
 // AUDITORÍA DE PLANILLA MENSUAL
 // ============================================================
 let auditoriaData   = null;
-let vehAuditoria    = 'STT115';
+let vehAuditoria    = VEH_DEFAULT[0] ? VEH_DEFAULT[0].placa : '';
 let auditDeclarado  = [];   // grilla editable de filas de viaje declaradas
 let auditCierre     = [];   // grilla editable de filas de cierre declaradas
 
@@ -3211,8 +3891,8 @@ function renderAuditoria(data) {
       const s = c.sistema, d = c.declarado, df = c.diffs || {};
       return `<tr style="background:${estadoColor(c.estado)}">
         <td class="fecha">${fmtFecha(c.fecha)}</td>
-        <td class="num">${c.numero_manifiesto || '—'}</td>
-        <td>${c.destino || '—'}</td>
+        <td class="num">${escHtml(c.numero_manifiesto || '—')}</td>
+        <td>${escHtml(c.destino || '—')}</td>
         ${cel(s ? s.flete : null,    d ? d.flete : null,    df.flete)}
         ${cel(s ? s.anticipo : null, d ? d.anticipo : null, df.anticipo)}
         ${cel(s ? s.gastos : null,   d ? d.gastos : null,   df.gastos)}
@@ -3253,9 +3933,9 @@ function renderAuditoria(data) {
   let cierreHtml = '';
   if ((dec.cierre || []).length) {
     const cr = dec.cierre.map(c => `<tr>
-      <td>${c.concepto_cierre || '—'}</td>
+      <td>${escHtml(c.concepto_cierre || '—')}</td>
       <td style="text-align:right;font-family:var(--mono);color:${(c.saldo_a_cobrar||0)<0?'var(--warn)':'var(--accent)'}">${fmt(c.saldo_a_cobrar || 0)}</td>
-      <td style="color:var(--muted);font-size:11px">${c.notas || ''}</td>
+      <td style="color:var(--muted);font-size:11px">${escHtml(c.notas || '')}</td>
     </tr>`).join('');
     cierreHtml = `<div class="oblig-section-title" style="margin-top:24px;">Cierre declarado (devoluciones / le debo / me debe)</div>
       <table style="width:100%"><thead><tr><th>Concepto</th><th style="text-align:right">Valor</th><th>Notas</th></tr></thead>
@@ -3266,9 +3946,9 @@ function renderAuditoria(data) {
   let comisionHtml = '';
   if ((sis.filas || []).length) {
     const cr = sis.filas.map(f => `<tr>
-      <td class="num">${f.numero_manifiesto || '—'}</td>
+      <td class="num">${escHtml(f.numero_manifiesto || '—')}</td>
       <td class="fecha">${fmtFecha(f.fecha)}</td>
-      <td>${f.destino || '—'}</td>
+      <td>${escHtml(f.destino || '—')}</td>
       <td style="text-align:right;font-family:var(--mono)">${fmt(f.valor_flete || 0)}</td>
       <td style="text-align:right;font-family:var(--mono);color:var(--warn)">${fmt(f.gastos || 0)}</td>
       <td style="text-align:right">
@@ -3289,7 +3969,7 @@ function renderAuditoria(data) {
   const formHtml = renderDeclaracionForm();
 
   content.innerHTML = cards
-    + `<div class="oblig-section-title">Comparativa por manifiesto · ${vehLabel(vehAuditoria)}</div>`
+    + `<div class="oblig-section-title">Comparativa por manifiesto · ${escHtml(vehLabel(vehAuditoria))}</div>`
     + tabla
     + cierreHtml
     + comisionHtml
@@ -3534,9 +4214,7 @@ function renderManifiestoPreview(p) {
       <div class="preview-field"><div class="field-label">Vehículo</div>
         <select class="field-input" id="mf-vehiculo">
           <option value="">— Sin asignar —</option>
-          <option value="STT115" ${p.vehiculo==='STT115'?'selected':''}>STT 115</option>
-          <option value="STT121" ${p.vehiculo==='STT121'?'selected':''}>STT 121</option>
-          <option value="UPO707" ${p.vehiculo==='UPO707'?'selected':''}>UPO 707</option>
+          ${VEH_DEFAULT.map(v => `<option value="${escHtml(v.placa)}" ${p.vehiculo===v.placa?'selected':''}>${escHtml(v.nombre)}</option>`).join('')}
         </select></div>
       ${manifInput('Conductor','conductor', p.conductor)}
       ${manifInput('Origen','origen', p.origen)}
@@ -3612,7 +4290,7 @@ function conciliarCobro(id) {
   const hoy = new Date().toISOString().slice(0,10);
   document.getElementById('cobro-content').innerHTML = `
     <div style="font-size:12px;color:var(--muted);margin-bottom:14px;">
-      Manifiesto <strong style="color:var(--text)">${v.numero_manifiesto || v.numero}</strong> · ${v.empresa_carga || ''}<br>
+      Manifiesto <strong style="color:var(--text)">${v.numero_manifiesto || v.numero}</strong> · ${escHtml(v.empresa_carga || '')}<br>
       Saldo esperado: <strong style="color:var(--accent)">${fmt(v.saldo_a_cobrar || 0)}</strong>
     </div>
     <div class="preview-field"><div class="field-label">Valor cobrado</div>
@@ -3672,7 +4350,7 @@ async function cargarClientesAliaddo(q) {
     if (d.error) { cont.innerHTML = '<span style="color:var(--warn)">' + d.error + '</span>'; return; }
     if (!d.clientes || !d.clientes.length) { cont.innerHTML = '<span style="color:var(--muted)">Sin resultados' + (q ? ' para "' + q + '"' : '') + '.</span>'; return; }
     cont.innerHTML = '<table class="dian-table" style="width:100%"><thead><tr><th>NIT</th><th>Nombre</th><th>Ciudad</th><th>Correo</th></tr></thead><tbody>'
-      + d.clientes.map(c => `<tr><td style="font-family:var(--mono)">${c.identificacion || '—'}</td><td>${c.nombre || '—'}</td><td>${c.ciudad || ''}</td><td style="font-size:10px">${c.email || ''}</td></tr>`).join('')
+      + d.clientes.map(c => `<tr><td style="font-family:var(--mono)">${escHtml(c.identificacion || '—')}</td><td>${escHtml(c.nombre || '—')}</td><td>${escHtml(c.ciudad || '')}</td><td style="font-size:10px">${escHtml(c.email || '')}</td></tr>`).join('')
       + '</tbody></table><div style="font-size:11px;color:var(--muted);margin-top:6px">' + d.clientes.length + ' cliente(s)' + (q ? '' : ' — página 1 (máx 50). Busca por NIT para uno específico.') + '</div>';
   } catch (err) { if (cont) cont.innerHTML = '<span style="color:var(--warn)">Error: ' + err.message + '</span>'; }
 }
@@ -3727,7 +4405,7 @@ async function cargarCuentasAliaddo(page) {
     if (d.error) { c.innerHTML = '<span style="color:var(--warn)">' + d.error + '</span>'; return; }
     if (!d.cuentas || !d.cuentas.length) { c.innerHTML = '<span style="color:var(--muted)">Sin más cuentas en esta página.</span>'; return; }
     c.innerHTML = '<table class="dian-table" style="width:100%"><thead><tr><th>Código</th><th>Nombre</th></tr></thead><tbody>'
-      + d.cuentas.map(x => `<tr><td style="font-family:var(--mono)">${x.code || '—'}</td><td>${x.name || '—'}</td></tr>`).join('') + '</tbody></table>';
+      + d.cuentas.map(x => `<tr><td style="font-family:var(--mono)">${escHtml(x.code || '—')}</td><td>${escHtml(x.name || '—')}</td></tr>`).join('') + '</tbody></table>';
   } catch (e) { c.innerHTML = 'Error: ' + e.message; }
 }
 
@@ -3789,12 +4467,12 @@ async function cargarCandidatosSoporte() {
     cont.innerHTML = '<table class="dian-table" style="width:100%"><thead><tr><th></th><th>Fecha</th><th>Proveedor</th><th>NIT</th><th>Doc</th><th>Concepto</th><th>Placa</th><th style="text-align:right">Total</th></tr></thead><tbody>'
       + docEquivCandidatos.map(g => `<tr>`
         + `<td><input type="checkbox" class="soporte-chk" value="${g.id}" checked onchange="actualizarResumenSoporte()"></td>`
-        + `<td style="font-family:var(--mono)">${g.fecha || '—'}</td>`
-        + `<td>${g.proveedor_nombre || '—'}</td>`
-        + `<td style="font-family:var(--mono);font-size:10px">${g.proveedor_nit || '—'}</td>`
-        + `<td style="font-size:10px">${g.numero_documento || ''}</td>`
-        + `<td style="font-size:10px">${(g.concepto || '').slice(0, 40)}</td>`
-        + `<td>${g.vehiculo || ''}</td>`
+        + `<td style="font-family:var(--mono)">${escHtml(g.fecha || '—')}</td>`
+        + `<td>${escHtml(g.proveedor_nombre || '—')}</td>`
+        + `<td style="font-family:var(--mono);font-size:10px">${escHtml(g.proveedor_nit || '—')}</td>`
+        + `<td style="font-size:10px">${escHtml(g.numero_documento || '')}</td>`
+        + `<td style="font-size:10px">${escHtml((g.concepto || '').slice(0, 40))}</td>`
+        + `<td>${escHtml(g.vehiculo || '')}</td>`
         + `<td style="text-align:right;font-family:var(--mono)">${fmt(g.total)}</td>`
         + `</tr>`).join('')
       + '</tbody></table>';
@@ -3893,7 +4571,7 @@ async function datosFactura(id) {
     const f = data.factura;
     const row = (label, val) => `<div style="display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--border);">
         <span style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;">${label}</span>
-        <span style="font-family:var(--mono);font-weight:700;color:var(--text);text-align:right;">${val != null && val !== '' ? val : '—'}</span></div>`;
+        <span style="font-family:var(--mono);font-weight:700;color:var(--text);text-align:right;">${val != null && val !== '' ? escHtml(val) : '—'}</span></div>`;
     document.getElementById('factura-content').innerHTML = `
       ${row('Emisor', (f.emisor?.nombre || '') + (f.emisor?.nit ? ' · NIT ' + f.emisor.nit : ''))}
       ${row('Cliente', (f.cliente?.nombre || '') + (f.cliente?.nit ? ' · NIT ' + f.cliente.nit : ''))}
@@ -3969,7 +4647,7 @@ function renderGastosViaje(data) {
     return `<label style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer;">
         ${cb}
         <span style="font-size:11px;color:var(--muted);font-family:var(--mono);flex:0 0 auto;">${fmtFecha(g.fecha)}</span>
-        <span style="flex:1;color:var(--text);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${g.proveedor_nombre || '—'}${g.categoria ? ` <span style="color:var(--muted)">· ${g.categoria}</span>` : ''}</span>
+        <span style="flex:1;color:var(--text);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(g.proveedor_nombre || '—')}${g.categoria ? ` <span style="color:var(--muted)">· ${escHtml(g.categoria)}</span>` : ''}</span>
         <span style="font-family:var(--mono);font-weight:700;color:var(--text);flex:0 0 auto;">${fmt(g.total || 0)}</span>
       </label>`;
   };
@@ -4129,7 +4807,7 @@ async function buscarTerceroFactura(q) {
       drop.innerHTML = '<div style="padding:8px;font-size:11px;color:var(--muted)">Sin coincidencias en Aliaddo. Escríbelo a mano o importa los clientes primero.</div>';
       drop.style.display = 'block'; return;
     }
-    drop.innerHTML = terceroResultados.map((t, i) => `<div class="fp-cli-item" data-idx="${i}" style="padding:8px;cursor:pointer;border-bottom:1px solid var(--border);font-size:12px"><b>${(t.nombre || '').replace(/</g, '&lt;')}</b><br><span style="font-family:var(--mono);font-size:10px;color:var(--muted)">${t.identificacion || ''}${t.ciudad ? (' · ' + t.ciudad) : ''}</span></div>`).join('');
+    drop.innerHTML = terceroResultados.map((t, i) => `<div class="fp-cli-item" data-idx="${i}" style="padding:8px;cursor:pointer;border-bottom:1px solid var(--border);font-size:12px"><b>${(t.nombre || '').replace(/</g, '&lt;')}</b><br><span style="font-family:var(--mono);font-size:10px;color:var(--muted)">${escHtml(t.identificacion || '')}${t.ciudad ? (' · ' + t.ciudad) : ''}</span></div>`).join('');
     drop.style.display = 'block';
     drop.querySelectorAll('.fp-cli-item').forEach(el => {
       el.addEventListener('mouseenter', () => el.style.background = 'var(--bg)');
@@ -4164,7 +4842,7 @@ function generarFacturaPrep() {
   const concepto = servicio + (ref ? (' — Manifiesto ' + ref) : '');
   const money = (n) => '$' + n.toLocaleString('es-CO');
   const bloque =
-'EMISOR: DOCE DOCENAS SAS — NIT 900768035-9\n' +
+'EMISOR: ' + emisorTexto() + '\n' +
 'CLIENTE: ' + (cliente || '(razón social)') + ' — NIT ' + (nit || '(NIT)') + (correo ? ('\nCORREO: ' + correo) : '') + '\n' +
 'ÍTEM: fletes (código 15) · Cantidad: 1\n' +
 'CONCEPTO: ' + concepto + '\n' +
@@ -4228,11 +4906,7 @@ function exportarResumen() {
 // ============================================================
 // Vehículos / Telegram
 // ============================================================
-const VEH_DEFAULT = [
-  { placa: 'STT115', nombre: 'STT 115' },
-  { placa: 'STT121', nombre: 'STT 121' },
-  { placa: 'UPO707', nombre: 'UPO 707' },
-];
+// VEH_DEFAULT (respaldo de la flota) se define arriba, junto a la configuración.
 
 async function abrirVehiculos() {
   const overlay = document.getElementById('veh-overlay');
@@ -4245,8 +4919,119 @@ async function abrirVehiculos() {
     const lista = (data.vehiculos || data.registros || data || []);
     renderVehiculos(Array.isArray(lista) && lista.length ? lista : VEH_DEFAULT);
   } catch (err) {
-    // Fallback offline: mostrar los 3 vehículos sin chat_id
+    // Fallback offline: mostrar los vehículos conocidos sin chat_id
     renderVehiculos(VEH_DEFAULT);
+  }
+  cargarChatsTelegram();
+}
+
+// ── Vinculación de chats de Telegram por enlace ──────────────
+// Solo aparece si la instancia tiene /api/telegram/chats (responde 200).
+async function cargarChatsTelegram() {
+  const cont = document.getElementById('veh-telegram');
+  if (!cont) return;
+  cont.style.display = 'none';
+  let data = null;
+  try {
+    const res = await fetch(`${WORKER_URL}/api/telegram/chats`);
+    if (res.status !== 200) return;
+    data = await res.json();
+  } catch { return; }
+  if (!data || !data.ok) return;
+
+  document.querySelectorAll('.veh-vinc').forEach(d => { d.style.display = ''; });
+  const chats = Array.isArray(data.chats) ? data.chats : [];
+  const pendientes = Array.isArray(data.pendientes) ? data.pendientes : [];
+  const rolTxt = r => r === 'dueno' ? 'Dueño' : 'Conductor';
+  const titulo = t => `<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);margin:14px 0 6px;">${t}</div>`;
+
+  let html = `<div style="border-top:4px solid var(--border);padding-top:14px;">
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+      <strong style="font-family:var(--serif);text-transform:uppercase;font-size:14px;">Chats de Telegram autorizados</strong>
+      <button class="vinc-btn" style="margin-left:auto" data-vinc-rol="dueno" data-vinc-placa="">Enlace para mi chat</button>
+    </div>
+    <div id="vinc-res-dueno"></div>`;
+
+  html += titulo('Autorizados');
+  if (!chats.length) {
+    html += '<div style="font-size:12px;color:var(--muted);">Todavía no hay chats vinculados. Genere un enlace y ábralo en Telegram.</div>';
+  } else {
+    html += chats.map(c => {
+      const activo = Number(c.activo) === 1;
+      let estado = activo ? 'activo' : 'revocado';
+      if (activo && c.rol === 'conductor' && !c.acepto_datos_en) estado = 'falta que responda /acepto';
+      return `<div style="display:flex;gap:10px;align-items:center;border:2px solid var(--border);padding:8px 10px;margin-bottom:6px;font-size:12px;flex-wrap:wrap;${activo ? '' : 'opacity:0.55;'}">
+        <strong>${rolTxt(c.rol)}</strong>
+        <span style="font-family:var(--mono);">${c.placa ? escHtml(vehLabel(c.placa)) : 'todas'}</span>
+        <span>${escHtml(c.nombre || '')}</span>
+        <span style="color:var(--muted);font-size:11px;">${escHtml(estado)} · ${escHtml(fmtFechaHoraCO(c.vinculado_en))}</span>
+        ${activo ? `<button class="vinc-btn" style="margin-left:auto;background:var(--warn);color:#fff;" data-revocar="${escHtml(c.chat_id)}">Revocar</button>` : ''}
+      </div>`;
+    }).join('');
+  }
+  if (pendientes.length) {
+    html += titulo('Enlaces sin usar');
+    html += pendientes.map(p => `<div style="font-size:12px;color:var(--muted);margin-bottom:4px;">${rolTxt(p.rol)} · ${p.placa ? escHtml(vehLabel(p.placa)) : 'todas'}${p.nombre ? ' · ' + escHtml(p.nombre) : ''} · vence ${escHtml(fmtFechaHoraCO(p.expira_en))}</div>`).join('');
+  }
+  html += '</div>';
+  cont.innerHTML = html;
+  cont.style.display = '';
+  cont.querySelectorAll('[data-revocar]').forEach(b => { b.onclick = () => revocarChatTelegram(b.dataset.revocar, b); });
+  cont.querySelectorAll('[data-vinc-rol]').forEach(b => { b.onclick = () => generarVinculoTelegram(b.dataset.vincRol, b.dataset.vincPlaca, b); });
+}
+
+async function generarVinculoTelegram(rol, placa, btn) {
+  const destino = document.getElementById(rol === 'dueno' ? 'vinc-res-dueno' : `vinc-res-${placa}`);
+  const texto = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Generando...'; }
+  try {
+    const body = { rol };
+    if (placa) body.placa = placa;
+    const res = await fetch(`${WORKER_URL}/api/vinculacion-telegram`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json().catch(() => ({}));
+    const v = data.vinculo;
+    if (!res.ok || !v || !/^https:\/\/t\.me\//.test(v.enlace || '')) {
+      showToast('Error: ' + (data.error || 'no se pudo generar el enlace'), 'err');
+      return;
+    }
+    if (!destino) return;
+    const msj = `Para enviar las fotos de recibos y manifiestos de ${placa ? vehLabel(placa) : 'la flota'}, abra este enlace en Telegram y responda /acepto: ${v.enlace}`;
+    destino.innerHTML = `<input class="vinc-enlace" readonly value="${escHtml(v.enlace)}" onclick="this.select()">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <button class="vinc-btn" data-copiar>Copiar</button>
+        ${rol === 'dueno'
+          ? `<a class="vinc-btn" style="text-decoration:none" target="_blank" rel="noopener" href="${escHtml(v.enlace)}">Abrir Telegram</a>`
+          : `<a class="vinc-btn" style="text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(msj)}">Enviar por WhatsApp</a>`}
+        <span style="font-size:11px;color:var(--muted);">Sirve una sola vez y solo se muestra ahora. Vence: ${escHtml(fmtFechaHoraCO(v.expira_en))}</span>
+      </div>`;
+    destino.querySelector('[data-copiar]').onclick = async (ev) => {
+      try { await navigator.clipboard.writeText(v.enlace); ev.target.textContent = 'Copiado'; }
+      catch { destino.querySelector('input').select(); showToast('Seleccione y copie el enlace', 'err'); }
+    };
+  } catch (err) {
+    showToast('Error: ' + err.message, 'err');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = texto; }
+  }
+}
+
+async function revocarChatTelegram(chatId, btn) {
+  if (!confirm('¿Revocar este chat? Dejará de poder enviar fotos al bot.')) return;
+  if (btn) btn.disabled = true;
+  try {
+    const res = await fetch(`${WORKER_URL}/api/telegram/chats/${encodeURIComponent(chatId)}`, { method: 'DELETE' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { showToast('Error: ' + (data.error || 'no se pudo revocar'), 'err'); return; }
+    showToast('✓ Chat revocado', 'ok');
+    cargarChatsTelegram();
+  } catch (err) {
+    showToast('Error: ' + err.message, 'err');
+  } finally {
+    if (btn) btn.disabled = false;
   }
 }
 
@@ -4262,21 +5047,28 @@ function renderVehiculos(vehiculos) {
     const nombre = v.nombre || vehLabel(placa);
     const chatId = v.telegram_chat_id || '';
     const safePlaca = placa.replace(/'/g, "\\'");
+    // Con la flota en D1 (otra instancia) el servidor rechaza pegar un chat_id: allá solo vale el enlace de vinculación
+    const sinChatManual = !!(window.FLOTA && window.FLOTA.entorno !== 'production');
     html += `<div style="border:2px solid var(--border);box-shadow:4px 4px 0 var(--border);padding:14px 16px;margin-bottom:14px;display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;">
       <div style="display:flex;flex-direction:column;gap:4px;min-width:90px;">
-        <span style="font-family:var(--mono);font-weight:700;font-size:16px;color:${vehColor(placa)};">${vehLabel(placa)}</span>
+        <span style="font-family:var(--mono);font-weight:700;font-size:16px;color:${vehColor(placa)};">${escHtml(vehLabel(placa))}</span>
         <span style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;">${nombre}</span>
       </div>
-      <div>
+      <div style="${sinChatManual ? 'visibility:hidden;' : ''}">
         <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);margin-bottom:4px;">Telegram chat_id</div>
-        <input type="text" id="veh-chat-${placa}" value="${chatId}" placeholder="-1001234567890"
+        <input type="text" id="veh-chat-${placa}" value="${escHtml(chatId)}" placeholder="-1001234567890"
           style="width:100%;padding:8px 10px;border:2px solid var(--border);font-family:var(--mono);font-size:12px;background:var(--surface);color:var(--text);">
       </div>
       <button onclick="guardarVehiculo('${safePlaca}', this)"
-        style="background:var(--accent);color:#fff;border:2px solid var(--border);padding:9px 16px;font-family:var(--sans);font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:0.06em;cursor:pointer;box-shadow:3px 3px 0 var(--border);">Guardar</button>
+        style="${sinChatManual ? 'display:none;' : ''}background:var(--accent);color:#fff;border:2px solid var(--border);padding:9px 16px;font-family:var(--sans);font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:0.06em;cursor:pointer;box-shadow:3px 3px 0 var(--border);">Guardar</button>
+      <div class="veh-vinc" style="grid-column:1/-1;display:none;">
+        <button class="vinc-btn" data-vinc-rol="conductor" data-vinc-placa="${escHtml(placa)}">Generar enlace de vinculación</button>
+        <div id="vinc-res-${escHtml(placa)}"></div>
+      </div>
     </div>`;
   }
   content.innerHTML = html;
+  content.querySelectorAll('[data-vinc-rol]').forEach(b => { b.onclick = () => generarVinculoTelegram(b.dataset.vincRol, b.dataset.vincPlaca, b); });
 }
 
 async function guardarVehiculo(placa, btn) {
@@ -4303,6 +5095,7 @@ async function guardarVehiculo(placa, btn) {
 }
 
 function toggleUsuario() {
+  if (window.FLOTA.entorno !== 'production') return; // el usuario es el de la sesión
   usuario = usuario === 'david' ? 'andrea' : 'david';
   document.getElementById('usuario-btn').textContent = usuario;
   document.getElementById('stat-user').textContent   = usuario;
@@ -4379,7 +5172,7 @@ function abrirConciliacionDian() {
       + '<p style="font-size:12px;color:var(--muted);margin:0 0 12px;line-height:1.5;">Sube el Excel de <b>“Documentos recibidos”</b> del portal DIAN (Factura Electrónica → Documentos recibidos → Exportar a Excel). Se cruza contra los recibos cargados y marca los que <b>no tienen respaldo</b> ante la DIAN.</p>'
       + '<div style="display:flex;gap:12px;align-items:end;flex-wrap:wrap;margin-bottom:14px;">'
       + '<label style="font-size:12px">Mes<br><input id="concdian-mes" type="month" style="padding:7px;border:2px solid var(--border);background:var(--bg);color:var(--text);font-family:var(--mono);"></label>'
-      + '<label style="font-size:12px">Vehículo<br><select id="concdian-veh" style="padding:7px;border:2px solid var(--border);background:var(--bg);color:var(--text);font-family:var(--mono);"><option value="">Todos</option><option>STT115</option><option>STT121</option><option>UPO707</option></select></label>'
+      + '<label style="font-size:12px">Vehículo<br><select id="concdian-veh" style="padding:7px;border:2px solid var(--border);background:var(--bg);color:var(--text);font-family:var(--mono);"><option value="">Todos</option>' + VEH_DEFAULT.map(v => '<option>' + escHtml(v.placa) + '</option>').join('') + '</select></label>'
       + '<label style="font-size:12px;padding-bottom:8px;"><input type="checkbox" id="concdian-solo" checked> Solo combustible</label>'
       + '<label style="font-size:12px;background:var(--warn);color:#fff;padding:9px 14px;cursor:pointer;font-weight:700;border:2px solid var(--border);box-shadow:3px 3px 0 var(--border);">📎 Subir Excel DIAN<input type="file" accept=".xlsx,.xls" style="display:none" onchange="conciliarDianArchivo(this.files[0])"></label>'
       + '</div>'
@@ -4454,13 +5247,13 @@ function renderConciliacionDian(d) {
   html += '<table class="dian-table" style="width:100%"><thead><tr><th>#</th><th>Fecha</th><th>Placa</th><th>Proveedor</th><th>Nº doc</th><th style="text-align:right">Valor</th><th>Pago</th><th>Estado</th><th>Factura DIAN</th></tr></thead><tbody>';
   for (const g of (d.recibos || [])) {
     const bg = g.estado === 'sospechoso' ? 'background:rgba(220,38,38,.12)' : g.estado === 'revisar' ? 'background:rgba(217,119,6,.10)' : g.estado === 'doc_soporte' ? 'background:rgba(37,99,235,.08)' : '';
-    const soporte = g.archivo_r2 ? ` <a href="${WORKER_URL}/api/soporte/${g.archivo_r2}" target="_blank" style="font-size:10px">📎</a>` : '';
-    html += `<tr style="${bg}"><td>${g.numero}</td><td style="font-family:var(--mono)">${g.fecha || ''}</td><td>${g.vehiculo || ''}</td><td>${(g.proveedor || '').slice(0, 26)}</td><td style="font-family:var(--mono);font-size:10px">${g.doc || ''}${soporte}</td><td style="text-align:right;font-family:var(--mono)">${fmt(g.total)}</td><td style="font-size:10px">${g.medio_pago || ''}</td><td>${badge(g.estado)}</td><td style="font-size:10px">${g.dian ? (g.dian.doc + ' · ' + fmt(g.dian.total)) : '<span style="color:var(--muted)">—</span>'}</td></tr>`;
+    const soporte = g.archivo_r2 ? ` <a href="${WORKER_URL}/api/soporte/${escHtml(g.archivo_r2)}" target="_blank" style="font-size:10px">📎</a>` : '';
+    html += `<tr style="${bg}"><td>${g.numero}</td><td style="font-family:var(--mono)">${escHtml(g.fecha || '')}</td><td>${escHtml(g.vehiculo || '')}</td><td>${escHtml((g.proveedor || '').slice(0, 26))}</td><td style="font-family:var(--mono);font-size:10px">${escHtml(g.doc || '')}${soporte}</td><td style="text-align:right;font-family:var(--mono)">${fmt(g.total)}</td><td style="font-size:10px">${escHtml(g.medio_pago || '')}</td><td>${badge(g.estado)}</td><td style="font-size:10px">${g.dian ? (g.dian.doc + ' · ' + fmt(g.dian.total)) : '<span style="color:var(--muted)">—</span>'}</td></tr>`;
   }
   html += '</tbody></table>';
   if ((d.dian_huerfanos || []).length) {
     html += `<div style="margin-top:16px"><b style="font-size:12px">Facturas DIAN sin recibo cargado (${d.dian_huerfanos.length})</b><div style="font-size:10px;color:var(--muted);margin:2px 0 6px">Compras que llegaron a la DIAN pero no están entre los recibos del filtro — el conductor no las subió, o son de otro camión/categoría.</div><table class="dian-table" style="width:100%"><thead><tr><th>Doc</th><th>Proveedor</th><th>Fecha</th><th style="text-align:right">Valor</th></tr></thead><tbody>`;
-    for (const x of d.dian_huerfanos) html += `<tr><td style="font-family:var(--mono);font-size:10px">${x.doc || ''}</td><td>${(x.nombre || '').slice(0, 30)}</td><td style="font-family:var(--mono)">${x.fecha || ''}</td><td style="text-align:right;font-family:var(--mono)">${fmt(x.total)}</td></tr>`;
+    for (const x of d.dian_huerfanos) html += `<tr><td style="font-family:var(--mono);font-size:10px">${escHtml(x.doc || '')}</td><td>${escHtml((x.nombre || '').slice(0, 30))}</td><td style="font-family:var(--mono)">${escHtml(x.fecha || '')}</td><td style="text-align:right;font-family:var(--mono)">${fmt(x.total)}</td></tr>`;
     html += '</tbody></table></div>';
   }
   res.innerHTML = html;
@@ -4578,7 +5371,7 @@ async function procesarDIAN(file) {
     document.getElementById('dian-loading').style.display = 'none';
 
     if (!data.ok) {
-      document.getElementById('dian-results').innerHTML = `<p style="color:var(--warn)">Error: ${data.error}</p>`;
+      document.getElementById('dian-results').innerHTML = `<p style="color:var(--warn)">Error: ${escHtml(data.error)}</p>`;
       return;
     }
 
@@ -4654,10 +5447,10 @@ function renderDIANResults(data) {
         : `<button class="btn btn-ghost" style="font-size:10px;padding:3px 8px" onclick="marcarDocEquivalente(${i})">Marcar generado</button>`;
       html += `<tr>
         <td class="num">${g.numero||'—'}</td>
-        <td style="font-size:11px">${g.fecha||'—'}</td>
-        <td>${g.proveedor_nombre||'—'}</td>
-        <td style="font-size:10px">${g.proveedor_nit||'—'}</td>
-        <td style="font-size:10px">${g.vehiculo||'—'}</td>
+        <td style="font-size:11px">${escHtml(g.fecha||'—')}</td>
+        <td>${escHtml(g.proveedor_nombre||'—')}</td>
+        <td style="font-size:10px">${escHtml(g.proveedor_nit||'—')}</td>
+        <td style="font-size:10px">${escHtml(g.vehiculo||'—')}</td>
         <td style="text-align:right">${fmt(g.total)}</td>
         <td>${accion} <button class="btn btn-ghost" style="font-size:10px;padding:3px 8px" onclick="datosAliaddo(${i})">Datos</button></td>
       </tr>`;
@@ -4673,8 +5466,8 @@ function renderDIANResults(data) {
       const g = c.gasto;
       html += `<tr style="opacity:.6">
         <td class="num">${g.numero||'—'}</td>
-        <td>${g.proveedor_nombre||'—'}</td>
-        <td style="font-size:10px">${g.numero_documento||'—'}</td>
+        <td>${escHtml(g.proveedor_nombre||'—')}</td>
+        <td style="font-size:10px">${escHtml(g.numero_documento||'—')}</td>
         <td style="text-align:right">${fmt(g.total)}</td>
       </tr>`;
     });
@@ -4688,10 +5481,10 @@ function renderDIANResults(data) {
     <table class="dian-table"><thead><tr><th>NIT</th><th>Proveedor</th><th>No. Doc</th><th>Fecha</th><th>Total</th></tr></thead><tbody>`;
     data.dian_sin_gasto.forEach(f => {
       html += `<tr>
-        <td style="font-size:10px">${f.nit_emisor||'—'}</td>
-        <td>${f.razon_social||'—'}</td>
-        <td style="font-size:10px">${f.numero_documento||'—'}</td>
-        <td>${f.fecha||'—'}</td>
+        <td style="font-size:10px">${escHtml(f.nit_emisor||'—')}</td>
+        <td>${escHtml(f.razon_social||'—')}</td>
+        <td style="font-size:10px">${escHtml(f.numero_documento||'—')}</td>
+        <td>${escHtml(f.fecha||'—')}</td>
         <td style="text-align:right">${fmt(f.total)}</td>
       </tr>`;
     });
@@ -4839,7 +5632,7 @@ async function analizarConIA() {
     const data = await res.json();
 
     if (!data.ok) {
-      document.getElementById('ia-content').innerHTML = `<p style="color:var(--warn)">Error: ${data.error}</p>`;
+      document.getElementById('ia-content').innerHTML = `<p style="color:var(--warn)">Error: ${escHtml(data.error)}</p>`;
       return;
     }
 
@@ -4864,8 +5657,8 @@ function renderAnalisisIA(data) {
       html += `
         <div class="ia-card">
           <div class="ia-card-info">
-            <div class="ia-card-name">${p.nombre}</div>
-            <div class="ia-card-detail">${p.tipo === 'empresa' ? 'Flota' : 'Personal'} · ${p.categoria || ''}</div>
+            <div class="ia-card-name">${escHtml(p.nombre)}</div>
+            <div class="ia-card-detail">${p.tipo === 'empresa' ? 'Flota' : 'Personal'} · ${escHtml(p.categoria || '')}</div>
             <div class="ia-card-razon">${p.razon}</div>
           </div>
           <div class="ia-card-valor">${p.valor_estimado ? fmt(p.valor_estimado) : '—'}</div>
@@ -4882,8 +5675,8 @@ function renderAnalisisIA(data) {
       html += `
         <div class="ia-card" id="ia-sug-${i}">
           <div class="ia-card-info">
-            <div class="ia-card-name">${r.nombre}</div>
-            <div class="ia-card-detail">${r.tipo === 'empresa' ? 'Flota' : 'Personal'} · ${r.categoria || ''} · ${r.frecuencia || 'mensual'}${r.dia_limite ? ' · día ' + r.dia_limite : ''}</div>
+            <div class="ia-card-name">${escHtml(r.nombre)}</div>
+            <div class="ia-card-detail">${r.tipo === 'empresa' ? 'Flota' : 'Personal'} · ${escHtml(r.categoria || '')} · ${escHtml(r.frecuencia || 'mensual')}${r.dia_limite ? ' · día ' + r.dia_limite : ''}</div>
             <div class="ia-card-razon">${r.razon}</div>
           </div>
           <div class="ia-card-valor">${r.valor_estimado ? fmt(r.valor_estimado) : '—'}</div>
@@ -5033,7 +5826,7 @@ async function procesarPeajes(file) {
     document.getElementById('peajes-loading').style.display = 'none';
 
     if (!data.ok) {
-      document.getElementById('peajes-results').innerHTML = `<p style="color:var(--warn)">Error: ${data.error || 'No se pudo importar'}</p>`;
+      document.getElementById('peajes-results').innerHTML = `<p style="color:var(--warn)">Error: ${escHtml(data.error || 'No se pudo importar')}</p>`;
       document.getElementById('peajes-actions').style.display = 'flex';
       return;
     }
@@ -5170,7 +5963,7 @@ async function procesarBanco(file) {
     document.getElementById('banco-loading').style.display = 'none';
 
     if (!data.ok) {
-      document.getElementById('banco-results').innerHTML = `<p style="color:var(--warn)">Error: ${data.error}</p>`;
+      document.getElementById('banco-results').innerHTML = `<p style="color:var(--warn)">Error: ${escHtml(data.error)}</p>`;
       return;
     }
 
@@ -5225,11 +6018,11 @@ function renderBancoResults(data) {
       }[c.metodo_match] || c.metodo_match;
 
       html += `<tr>
-        <td>${m.fecha||'—'}</td>
-        <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${m.descripcion}">${m.descripcion||'—'}</td>
+        <td>${escHtml(m.fecha||'—')}</td>
+        <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(m.descripcion)}">${escHtml(m.descripcion||'—')}</td>
         <td style="text-align:right">${fmt(m.valor)}</td>
         <td class="num">${g.numero}</td>
-        <td>${g.proveedor_nombre}</td>
+        <td>${escHtml(g.proveedor_nombre)}</td>
         <td style="text-align:right">${fmt(g.total)}${diffStr}</td>
         <td><span style="background:var(--border);padding:1px 6px;border-radius:8px;font-size:9px;color:var(--accent)">${matchLabel}</span></td>
       </tr>`;
@@ -5245,10 +6038,10 @@ function renderBancoResults(data) {
     </tr></thead><tbody>`;
     data.sin_soporte.forEach(m => {
       html += `<tr style="background:rgba(240,224,160,.04)">
-        <td>${m.fecha||'—'}</td>
-        <td style="max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${m.descripcion}">${m.descripcion||'—'}</td>
+        <td>${escHtml(m.fecha||'—')}</td>
+        <td style="max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(m.descripcion)}">${escHtml(m.descripcion||'—')}</td>
         <td style="text-align:right;color:var(--accent2)">${fmt(m.valor)}</td>
-        <td style="font-size:10px">${m.referencia||'—'}</td>
+        <td style="font-size:10px">${escHtml(m.referencia||'—')}</td>
       </tr>`;
     });
     html += '</tbody></table></div>';
@@ -5263,11 +6056,11 @@ function renderBancoResults(data) {
     data.solo_en_sistema.forEach(g => {
       html += `<tr style="background:rgba(160,208,240,.04)">
         <td class="num">${g.numero}</td>
-        <td>${g.proveedor_nombre}</td>
-        <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${g.concepto}">${g.concepto||'—'}</td>
-        <td>${g.fecha||'—'}</td>
+        <td>${escHtml(g.proveedor_nombre)}</td>
+        <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(g.concepto)}">${escHtml(g.concepto||'—')}</td>
+        <td>${escHtml(g.fecha||'—')}</td>
         <td style="text-align:right;color:#a0d0f0">${fmt(g.total)}</td>
-        <td style="font-size:10px">${g.estado}</td>
+        <td style="font-size:10px">${escHtml(g.estado)}</td>
       </tr>`;
     });
     html += '</tbody></table></div>';
@@ -5357,7 +6150,7 @@ async function ejecutarComparativo() {
     document.getElementById('comp-loading').style.display = 'none';
 
     if (!data.ok) {
-      document.getElementById('comp-results').innerHTML = `<p style="color:var(--warn)">Error: ${data.error}</p>`;
+      document.getElementById('comp-results').innerHTML = `<p style="color:var(--warn)">Error: ${escHtml(data.error)}</p>`;
       return;
     }
 
@@ -5428,7 +6221,7 @@ function renderComparativo(data) {
     const pctSign = cat.porcentaje > 0 ? '+' : '';
 
     html += `<tr>
-      <td>${cat.categoria}</td>
+      <td>${escHtml(cat.categoria)}</td>
       <td>${cat.mes1 !== 0 ? fmt(cat.mes1) : '<span class="comp-neutral">—</span>'}</td>
       <td>${cat.mes2 !== 0 ? fmt(cat.mes2) : '<span class="comp-neutral">—</span>'}</td>
       <td class="${cls}"><span class="comp-arrow">${arrow}</span>${sign}${fmt(cat.diferencia)}</td>
@@ -5477,7 +6270,7 @@ async function loadRecurrentes() {
     // Mostrar faltantes primero (advertencias)
     for (const f of data.faltantes) {
       html += `<div class="rec-warn" title="Sin registro en ${mesNombre(mes)} ${anio}">
-        <div class="rec-dot"></div> ${f.nombre}
+        <div class="rec-dot"></div> ${escHtml(f.nombre)}
       </div>`;
     }
 
@@ -5485,7 +6278,7 @@ async function loadRecurrentes() {
     for (const o of data.ok) {
       const valor = o.registro ? formatCOP(o.registro.total) : '';
       html += `<div class="rec-ok" title="${valor}">
-        <div class="rec-dot"></div> ${o.nombre}
+        <div class="rec-dot"></div> ${escHtml(o.nombre)}
       </div>`;
     }
 
@@ -5675,7 +6468,7 @@ const CENTRO_CATEGORIAS = [
   'Viáticos conductor','Documentos','Multas','Báscula','Cargue / Descargue',
   'Administración','Misceláneos'
 ];
-const CENTRO_VEHICULOS = ['STT115','STT121','UPO707'];
+const CENTRO_VEHICULOS = VEH_DEFAULT.map(v => v.placa);
 let centroChartTendencia = null;
 let centroChartCategoria = null;
 let centroChartVehiculo  = null;
@@ -5788,7 +6581,7 @@ function renderCentroControl(data) {
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:24px;">
       ${centroAlertaCard('Gastos en revisión', a.gastos_revision||0, true, "setTab('revision')")}
       ${centroAlertaCard('Doc. equivalente pend.', a.doc_equivalente_pendiente||0, true, "abrirCruceDIANCentro()")}
-      ${centroAlertaCard('Viajes sin facturar', a.viajes_sin_facturar||0, false, "showViajes()")}
+      ${funcionActiva('facturacion') ? centroAlertaCard('Viajes sin facturar', a.viajes_sin_facturar||0, false, "showViajes()") : ''}
       ${centroAlertaCard('Viajes sin cobrar', a.viajes_sin_cobrar||0, false, "showViajes()")}
       ${centroAlertaCard('Obligaciones vencidas', a.obligaciones_vencidas||0, true, "showObligaciones('pendientes')")}
       ${centroAlertaCard('Obligaciones próximas', a.obligaciones_proximas||0, false, "showObligaciones('pendientes')")}
@@ -5958,7 +6751,7 @@ function abrirFormPresupuesto() {
   wrap.id = 'centro-form-overlay';
   wrap.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
   const catOpts = CENTRO_CATEGORIAS.map(c => `<option>${c}</option>`).join('');
-  const vehOpts = CENTRO_VEHICULOS.map(v => `<option value="${v}">${vehLabel(v)}</option>`).join('');
+  const vehOpts = CENTRO_VEHICULOS.map(v => `<option value="${v}">${escHtml(vehLabel(v))}</option>`).join('');
   wrap.innerHTML = `
     <div style="background:var(--surface);border:2px solid var(--border);box-shadow:6px 6px 0 var(--border);padding:24px;width:380px;max-width:92vw;">
       <h3 style="font-family:var(--serif);color:var(--accent);margin-bottom:16px;font-size:16px;">Nuevo presupuesto mensual</h3>
@@ -6159,7 +6952,7 @@ function renderObligCard(ob, estado) {
       statusHtml = `<span class="oblig-card-status proximo">${ob.dias_restantes} dias</span>`;
     } else {
       colorClass = 'yellow';
-      statusHtml = `<span class="oblig-card-status proximo">${ob.frecuencia}</span>`;
+      statusHtml = `<span class="oblig-card-status proximo">${escHtml(ob.frecuencia)}</span>`;
     }
   }
 
@@ -6176,7 +6969,7 @@ function renderObligCard(ob, estado) {
   } else {
     actionsHtml = `
       <div class="oblig-card-actions">
-        <button class="oblig-btn-sm primary" onclick="event.stopPropagation(); marcarPagado(${ob.id}, '${(ob.proveedor_nombre||'').replace(/'/g,"\\'")}', '${ob.categoria||''}', ${ob.valor_estimado||0}, '${(ob.proveedor_nit||'').replace(/'/g,"\\'")}')">Marcar pagado</button>
+        <button class="oblig-btn-sm primary" onclick="event.stopPropagation(); marcarPagado(${Number(ob.id) || 0}, ${escHtml(JSON.stringify(ob.proveedor_nombre||''))}, ${escHtml(JSON.stringify(ob.categoria||''))}, ${Number(ob.valor_estimado)||0}, ${escHtml(JSON.stringify(ob.proveedor_nit||''))})">Marcar pagado</button>
         <button class="oblig-btn-sm" onclick="event.stopPropagation(); abrirFormObligacion(${ob.id})">Editar</button>
         <button class="oblig-btn-sm danger" onclick="event.stopPropagation(); eliminarObligacion(${ob.id})">Borrar</button>
       </div>`;
@@ -6186,14 +6979,14 @@ function renderObligCard(ob, estado) {
     <div class="oblig-card ${colorClass}" onclick="abrirFormObligacion(${ob.id})">
       <div class="oblig-card-main">
         <div class="oblig-card-top">
-          <span class="oblig-card-name">${ob.nombre}</span>
+          <span class="oblig-card-name">${escHtml(ob.nombre)}</span>
           <span class="oblig-tipo-tag ${tipoClass}">${tipoLabel}</span>
         </div>
         <div class="oblig-card-meta">
-          ${ob.categoria ? `<span>${ob.categoria}</span>` : ''}
+          ${ob.categoria ? `<span>${escHtml(ob.categoria)}</span>` : ''}
           ${diaLimite ? `<span>Dia ${diaLimite}</span>` : ''}
-          ${ob.frecuencia ? `<span>${ob.frecuencia}</span>` : ''}
-          ${ob.proveedor_nombre ? `<span>${ob.proveedor_nombre}</span>` : ''}
+          ${ob.frecuencia ? `<span>${escHtml(ob.frecuencia)}</span>` : ''}
+          ${ob.proveedor_nombre ? `<span>${escHtml(ob.proveedor_nombre)}</span>` : ''}
         </div>
         ${actionsHtml}
       </div>
@@ -6246,15 +7039,15 @@ function renderObligCardTodas(ob, inactive) {
     <div class="oblig-card ${inactive ? '' : 'yellow'}" style="${inactive ? 'opacity:0.5' : ''}" onclick="abrirFormObligacion(${ob.id})">
       <div class="oblig-card-main">
         <div class="oblig-card-top">
-          <span class="oblig-card-name">${ob.nombre}</span>
+          <span class="oblig-card-name">${escHtml(ob.nombre)}</span>
           <span class="oblig-tipo-tag ${tipoClass}">${tipoLabel}</span>
         </div>
         <div class="oblig-card-meta">
-          ${ob.categoria ? `<span>${ob.categoria}</span>` : ''}
+          ${ob.categoria ? `<span>${escHtml(ob.categoria)}</span>` : ''}
           ${ob.dia_limite ? `<span>Dia ${ob.dia_limite}</span>` : ''}
-          <span>${ob.frecuencia}</span>
-          ${ob.proveedor_nombre ? `<span>${ob.proveedor_nombre}</span>` : ''}
-          ${ob.medio_pago ? `<span>${ob.medio_pago}</span>` : ''}
+          <span>${escHtml(ob.frecuencia)}</span>
+          ${ob.proveedor_nombre ? `<span>${escHtml(ob.proveedor_nombre)}</span>` : ''}
+          ${ob.medio_pago ? `<span>${escHtml(ob.medio_pago)}</span>` : ''}
         </div>
         <div class="oblig-card-actions">
           <button class="oblig-btn-sm" onclick="event.stopPropagation(); abrirFormObligacion(${ob.id})">Editar</button>
@@ -6263,7 +7056,7 @@ function renderObligCardTodas(ob, inactive) {
       </div>
       <div class="oblig-card-right">
         <span class="oblig-card-valor">${valorStr}</span>
-        ${inactive ? '<span class="oblig-card-status inactivo">INACTIVA</span>' : `<span class="oblig-card-status proximo">${ob.frecuencia}</span>`}
+        ${inactive ? '<span class="oblig-card-status inactivo">INACTIVA</span>' : `<span class="oblig-card-status proximo">${escHtml(ob.frecuencia)}</span>`}
       </div>
     </div>`;
 }
@@ -6568,7 +7361,7 @@ async function abrirProveedores() {
     const res = await fetch(`${WORKER_URL}/api/proveedores`);
     const data = await res.json();
     if (!data.ok) {
-      document.getElementById('prov-content').innerHTML = `<p style="color:var(--warn)">Error: ${data.error}</p>`;
+      document.getElementById('prov-content').innerHTML = `<p style="color:var(--warn)">Error: ${escHtml(data.error)}</p>`;
       return;
     }
     renderProveedoresModal(data);
@@ -6627,7 +7420,7 @@ async function npExtraerCert(file) {
     });
     const data = await res.json();
     if (!data.ok) {
-      result.innerHTML = `<span style="color:var(--warn)">❌ Error: ${data.error || 'No se pudo procesar'}</span>`;
+      result.innerHTML = `<span style="color:var(--warn)">❌ Error: ${escHtml(data.error || 'No se pudo procesar')}</span>`;
       btn.disabled = false;
       btn.textContent = 'Reintentar';
       return;
@@ -6683,7 +7476,7 @@ async function npExtraerCert(file) {
       msg += `<div style="margin-top:4px;color:var(--accent2);font-size:10px">⚠ Banco "${e.banco}" no se pudo mapear. Selecciónalo manualmente.</div>`;
     }
     if (e.notas) {
-      msg += `<div style="margin-top:4px;font-size:10px;color:var(--muted);font-style:italic">${e.notas}</div>`;
+      msg += `<div style="margin-top:4px;font-size:10px;color:var(--muted);font-style:italic">${escHtml(e.notas)}</div>`;
     }
     result.innerHTML = msg;
     btn.disabled = false;
@@ -6777,7 +7570,7 @@ async function abrirPagoDirecto() {
     const res = await fetch(`${WORKER_URL}/api/proveedores`);
     const data = await res.json();
     if (!data.ok) {
-      content.innerHTML = `<p style="color:var(--warn)">Error: ${data.error}</p>`;
+      content.innerHTML = `<p style="color:var(--warn)">Error: ${escHtml(data.error)}</p>`;
       return;
     }
     pagoDirectoProvs = data.proveedores || [];
@@ -6852,7 +7645,7 @@ function renderPagoDirecto() {
       html += `<tr data-prov-id="${p.id}">
         <td style="text-align:center;padding:8px;border-bottom:1px solid var(--border);"><input type="checkbox" class="pd-row-check" onclick="pdRecalc()" style="accent-color:var(--accent);"></td>
         <td style="padding:8px;border-bottom:1px solid var(--border);">
-          <div style="font-weight:600;">${p.nombre_corto || p.nombre}</div>
+          <div style="font-weight:600;">${escHtml(p.nombre_corto || p.nombre)}</div>
           <div style="font-size:10px;color:var(--muted);font-family:var(--mono);">${p.nit || '—'}</div>
         </td>
         <td style="padding:8px;border-bottom:1px solid var(--border);font-size:10px;">
@@ -6871,7 +7664,7 @@ function renderPagoDirecto() {
       html += `<tr style="background:#fff8e0;opacity:0.85">
         <td style="text-align:center;padding:8px;border-bottom:1px solid var(--border);">⚠</td>
         <td style="padding:8px;border-bottom:1px solid var(--border);">
-          <div style="font-weight:600;">${p.nombre_corto || p.nombre}</div>
+          <div style="font-weight:600;">${escHtml(p.nombre_corto || p.nombre)}</div>
           <div style="font-size:10px;color:var(--muted);font-family:var(--mono);">${p.nit || '—'}</div>
         </td>
         <td colspan="2" style="padding:8px;border-bottom:1px solid var(--border);font-size:11px;color:var(--warn);font-weight:600;">Sin cuenta bancaria configurada</td>
@@ -7043,8 +7836,8 @@ function renderProveedoresModal(data) {
     const safeNit = (p.nit || '').replace(/'/g, "\\'");
 
     html += `<tr style="border-bottom:1px solid var(--border);">
-      <td style="padding:9px 8px;font-weight:600;">${p.nombre_corto || p.nombre} <span style="margin-left:6px;padding:1px 6px;background:${statusBg};color:${statusFg};font-size:9px;font-weight:700;letter-spacing:0.08em;">${statusTxt}</span></td>
-      <td style="padding:9px 8px;font-family:var(--mono);color:var(--muted);">${p.nit || '—'}</td>
+      <td style="padding:9px 8px;font-weight:600;">${escHtml(p.nombre_corto || p.nombre)} <span style="margin-left:6px;padding:1px 6px;background:${statusBg};color:${statusFg};font-size:9px;font-weight:700;letter-spacing:0.08em;">${statusTxt}</span></td>
+      <td style="padding:9px 8px;font-family:var(--mono);color:var(--muted);">${escHtml(p.nit || '—')}</td>
       <td style="padding:9px 8px;">${bancoTxt}</td>
       <td style="padding:9px 8px;text-align:right;font-family:var(--mono);font-weight:600;">${p.gastos_sin_pagar || 0}</td>
       <td style="padding:9px 8px;text-align:right;font-family:var(--mono);font-weight:700;color:${p.total_sin_pagar > 0 ? 'var(--accent)' : 'var(--muted)'}">${p.total_sin_pagar > 0 ? fmt(p.total_sin_pagar) : '—'}</td>
@@ -7099,7 +7892,7 @@ async function abrirModalPago() {
     const res = await fetch(`${WORKER_URL}/api/pago-masivo/preview?ids=${ids}`);
     const data = await res.json();
     if (!data.ok) {
-      content.innerHTML = `<p style="color:var(--warn)">Error: ${data.error}</p>`;
+      content.innerHTML = `<p style="color:var(--warn)">Error: ${escHtml(data.error)}</p>`;
       return;
     }
     renderPagoModal(data);
@@ -7122,7 +7915,7 @@ function renderPagoModal(data) {
       </div>
       <div>
         <div style="font-size:10px;color:var(--muted);margin-bottom:4px">Cuenta origen Finandina</div>
-        <input type="text" id="pago-cuenta-origen" placeholder="9120047529" value="${localStorage.getItem('finandina_cuenta_origen') || ''}" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:6px 10px;color:var(--text);font-family:var(--mono);font-size:12px;">
+        <input type="text" id="pago-cuenta-origen" placeholder="0000000000" value="${localStorage.getItem('finandina_cuenta_origen') || ''}" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:6px 10px;color:var(--text);font-family:var(--mono);font-size:12px;">
       </div>
       <div>
         <div style="font-size:10px;color:var(--muted);margin-bottom:4px">Tipo cuenta origen</div>
@@ -7153,9 +7946,9 @@ function renderPagoModal(data) {
     for (const g of data.listos) {
       html += `<tr data-gasto-id="${g.id}">
         <td style="padding:4px 6px;color:var(--muted)">${g.numero}</td>
-        <td style="padding:4px 6px">${g.proveedor_nombre}</td>
-        <td style="padding:4px 6px;font-size:10px;color:var(--muted)">${g.banco_finandina || ''}</td>
-        <td style="padding:4px 6px;font-size:10px;color:var(--muted)">${g.tipo_cuenta} ${g.numero_cuenta}</td>
+        <td style="padding:4px 6px">${escHtml(g.proveedor_nombre)}</td>
+        <td style="padding:4px 6px;font-size:10px;color:var(--muted)">${escHtml(g.banco_finandina || '')}</td>
+        <td style="padding:4px 6px;font-size:10px;color:var(--muted)">${escHtml(g.tipo_cuenta)} ${escHtml(g.numero_cuenta)}</td>
         <td style="padding:4px 6px;text-align:right;">
           <input type="number" min="0" step="1" value="${Math.round(Math.abs(g.total))}" data-original="${Math.round(Math.abs(g.total))}" onchange="actualizarValorLinea(this)" oninput="actualizarValorLinea(this)" style="width:140px;text-align:right;padding:4px 6px;border:2px solid var(--border);background:var(--surface);font-family:var(--mono);font-weight:700;color:var(--accent);font-size:12px;">
         </td>
@@ -7169,7 +7962,7 @@ function renderPagoModal(data) {
     html += `<div style="margin-bottom:14px;"><div style="font-size:11px;color:var(--accent2);text-transform:uppercase;margin-bottom:6px;">⚠ Falta info bancaria del proveedor (${data.faltan.length})</div>
     <table style="width:100%;font-size:11px;border-collapse:collapse;"><thead><tr style="color:var(--muted)"><th style="text-align:left;padding:4px 6px;border-bottom:1px solid var(--border)">#</th><th style="text-align:left;padding:4px 6px;border-bottom:1px solid var(--border)">Proveedor</th><th style="text-align:right;padding:4px 6px;border-bottom:1px solid var(--border)">Total</th><th></th></tr></thead><tbody>`;
     for (const g of data.faltan) {
-      html += `<tr><td style="padding:4px 6px;color:var(--muted)">${g.numero}</td><td style="padding:4px 6px">${g.proveedor_nombre}</td><td style="padding:4px 6px;text-align:right;color:var(--accent2)">${fmt(g.total)}</td><td style="padding:4px 6px"><button onclick="abrirFormBanco(${g.prov_id || 'null'}, '${(g.proveedor_nombre || '').replace(/'/g, "\\'")}', '${(g.proveedor_nit || '').replace(/'/g, "\\'")}', ${JSON.stringify(g).replace(/"/g, '&quot;')})" style="background:transparent;color:var(--accent2);border:1px solid var(--accent2);padding:3px 10px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;">Llenar</button></td></tr>`;
+      html += `<tr><td style="padding:4px 6px;color:var(--muted)">${g.numero}</td><td style="padding:4px 6px">${escHtml(g.proveedor_nombre)}</td><td style="padding:4px 6px;text-align:right;color:var(--accent2)">${fmt(g.total)}</td><td style="padding:4px 6px"><button onclick="abrirFormBanco(${Number(g.prov_id) || 'null'}, ${escHtml(JSON.stringify(g.proveedor_nombre || ''))}, ${escHtml(JSON.stringify(g.proveedor_nit || ''))}, ${escHtml(JSON.stringify(g))})" style="background:transparent;color:var(--accent2);border:1px solid var(--accent2);padding:3px 10px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:10px;">Llenar</button></td></tr>`;
     }
     html += '</tbody></table></div>';
   }
@@ -7365,7 +8158,7 @@ async function extraerCertificado(file) {
     });
     const data = await res.json();
     if (!data.ok) {
-      result.innerHTML = `<span style="color:var(--warn)">❌ Error: ${data.error || 'No se pudo procesar'}</span>`;
+      result.innerHTML = `<span style="color:var(--warn)">❌ Error: ${escHtml(data.error || 'No se pudo procesar')}</span>`;
       btn.disabled = false;
       btn.textContent = 'Reintentar';
       return;
@@ -7420,7 +8213,7 @@ async function extraerCertificado(file) {
       msg += `<div style="margin-top:4px;color:var(--accent2);font-size:10px">⚠ Banco "${e.banco}" no se pudo mapear automáticamente. Selecciona manualmente.</div>`;
     }
     if (e.notas) {
-      msg += `<div style="margin-top:4px;font-size:10px;color:var(--muted);font-style:italic">Notas IA: ${e.notas}</div>`;
+      msg += `<div style="margin-top:4px;font-size:10px;color:var(--muted);font-style:italic">Notas IA: ${escHtml(e.notas)}</div>`;
     }
     result.innerHTML = msg;
     btn.disabled = false;
@@ -7479,7 +8272,7 @@ async function guardarInfoBanco(provId) {
 
 <script>
 (function() {
-  const WORKER_URL = 'https://tractomulas-gastos.ddropero.workers.dev';
+  // WORKER_URL es la constante global definida en el primer script.
 
   const CHART_COLORS = {
     'Combustible':            '#f0e0a0',
@@ -7740,7 +8533,8 @@ async function guardarInfoBanco(provId) {
 </script>
 
 <script>
-  if ('serviceWorker' in navigator) {
+  // Solo la instancia de producción registra el service worker
+  if ('serviceWorker' in navigator && ES_HOST_PRODUCCION) {
     navigator.serviceWorker.register('/sw.js');
   }
 </script>

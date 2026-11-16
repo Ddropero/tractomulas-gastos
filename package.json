@@ -3,7 +3,13 @@
   "private": true,
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy --env=\"\"",
+    "deploy:piloto": "wrangler deploy --env piloto",
+    "dev:piloto": "wrangler dev --env piloto --local",
+    "db:piloto": "wrangler d1 execute flota-piloto --env piloto --remote --file=schema-base-piloto.sql && wrangler d1 execute flota-piloto --env piloto --remote --file=schema-piloto.sql",
+    "db:piloto:local": "wrangler d1 execute flota-piloto --env piloto --local --file=schema-base-piloto.sql && wrangler d1 execute flota-piloto --env piloto --local --file=schema-piloto.sql",
+    "dry-run": "wrangler deploy --dry-run --env=\"\"",
+    "dry-run:piloto": "wrangler deploy --dry-run --env piloto"
   },
   "devDependencies": {
     "wrangler": "^4"

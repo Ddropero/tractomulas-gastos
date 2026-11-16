@@ -21,7 +21,14 @@ const VEHICULOS = ['STT115', 'STT121', 'UPO707'];
 
 const CATEGORIAS = 'Combustible | Peajes | Llantas | Mantenimiento | Repuestos | Aceites y lubricantes | Lavado | Parqueadero | Seguro | Impuestos | Tecnomecánica | GPS / Tecnología | Viáticos conductor | Documentos | Multas | Báscula | Cargue / Descargue | Administración | Misceláneos';
 
-const PROMPT = `Eres un procesador de documentos de gastos de una flota de tractomulas en Colombia (placas STT 115, STT 121, UPO 707).
+// placas: lista de la flota (por defecto la fija de siempre). Con lista vacía no se nombra ninguna placa.
+export function construirPrompt(placas = VEHICULOS) {
+  const contexto = placas.length ? ` (placas ${placas.map(p => p.slice(0, 3) + ' ' + p.slice(3)).join(', ')})` : '';
+  const campoVehiculo = placas.length ? `${placas.join(' | ')} | null` : 'placa leída sin espacios ni guiones (ej. ABC123) | null';
+  const reglaVehiculo = placas.length
+    ? `busca placa ${placas.map(p => p.slice(0, 3) + '-' + p.slice(3)).join('/')} en el documento; si no aparece, null`
+    : 'devuelve la placa del vehículo si aparece en el documento; si no aparece, null';
+  return `Eres un procesador de documentos de gastos de una flota de tractomulas en Colombia${contexto}.
 
 Analiza el documento y devuelve EXCLUSIVAMENTE un JSON con este schema EXACTO:
 
@@ -44,7 +51,7 @@ Analiza el documento y devuelve EXCLUSIVAMENTE un JSON con este schema EXACTO:
   "clasificacion": {
     "categoria": "una de: ${CATEGORIAS}",
     "concepto": "máx 80 chars ej: ACPM 80 gal - Terpel Villeta",
-    "vehiculo": "STT115 | STT121 | UPO707 | null",
+    "vehiculo": "${campoVehiculo}",
     "ruta": "origen-destino o null",
     "kilometraje": "número o null"
   },
@@ -63,9 +70,10 @@ REGLAS:
 - Taller/frenos/sincronización → Mantenimiento; Filtros/baterías → Repuestos; Aceite → Aceites y lubricantes
 - SOAT/póliza RCE → Seguro; Revisión técnico-mecánica → Tecnomecánica; SIMIT/comparendo → Multas
 - Comida/hotel conductor → Viáticos conductor; Manifiesto/planilla/permisos → Documentos; Pesaje → Báscula
-- VEHÍCULO: busca placa STT-115/STT-121/UPO-707 en el documento; si no aparece, null
+- VEHÍCULO: ${reglaVehiculo}
 - Imagen borrosa o ilegible: confianza = "baja"
 - Responde SOLO JSON puro, sin markdown`;
+}
 
 function toNum(v) {
   if (typeof v === 'number') return v;
@@ -76,10 +84,10 @@ function toNum(v) {
   return parseFloat(s) || 0;
 }
 
-function detectarVehiculo(texto) {
+function detectarVehiculo(texto, placas = VEHICULOS) {
   if (!texto) return null;
   const t = String(texto).toUpperCase().replace(/[\s\-]/g, '');
-  for (const codigo of VEHICULOS) {
+  for (const codigo of placas) {
     if (t.includes(codigo)) return codigo;
   }
   return null;
@@ -95,12 +103,15 @@ const esTimeout = err => !!err && (err.name === 'TimeoutError' || err.name === '
 //   reintentos → esperas en ms ante 500/503 (por defecto [1500, 3000]; [] = sin reintentos, para cuando hay respaldo)
 //   timeoutMs  → tope por fetch (por defecto 12000; con respaldo conviene menos para dejarle presupuesto al respaldo)
 //   deadline   → epoch ms hasta el que hay presupuesto de tiempo; cada fetch se recorta a lo que queda
+//   placas     → flota de la instancia (config-empresa.js); sin esta opción, la lista y el comportamiento de siempre
 export async function runGeminiAgent(fileBase64, mimeType, apiKey, db, opts = {}) {
+  const flotaConfigurada = Array.isArray(opts && opts.placas);
+  const placas = flotaConfigurada ? opts.placas : VEHICULOS;
   const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
   const body = {
     contents: [{ parts: [
       { inline_data: { mime_type: mimeType, data: fileBase64 } },
-      { text: PROMPT }
+      { text: construirPrompt(placas) }
     ]}],
     generationConfig: {
       responseMimeType: 'application/json',
@@ -180,7 +191,11 @@ export async function runGeminiAgent(fileBase64, mimeType, apiKey, db, opts = {}
   const nombreProveedor = catalogo?.nombre_corto || p.nombre_comercial || p.razon_social || 'Proveedor desconocido';
   const categoria = c.categoria || catalogo?.categoria_default || 'Misceláneos';
   const confianza = parsed.confianza || 'media';
-  const vehiculo = c.vehiculo || detectarVehiculo(`${c.concepto || ''} ${c.ruta || ''} ${f.numero_documento || ''}`);
+  // Con flota configurada solo cuenta una placa de la flota; sin ella, igual que siempre (lo que diga el modelo o el texto)
+  const restoTexto = `${c.concepto || ''} ${c.ruta || ''} ${f.numero_documento || ''}`;
+  const vehiculo = flotaConfigurada
+    ? (detectarVehiculo(c.vehiculo, placas) || detectarVehiculo(restoTexto, placas))
+    : (c.vehiculo || detectarVehiculo(restoTexto));
 
   return {
     proveedor_nit: p.nit || null,

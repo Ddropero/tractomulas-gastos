@@ -1,0 +1,1185 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<meta name="referrer" content="no-referrer">
+<title>Flota · Inscripción al piloto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:ital,wght@0,300;0,600;1,300&display=swap" rel="stylesheet">
+<meta name="theme-color" content="#0d0e0f">
+<style>
+  :root {
+    --bg: #0d0e0f;
+    --surface: #141517;
+    --border: #222427;
+    --accent: #a0d0f0;
+    --accent2: #f0d0a0;
+    --warn: #f0b0a0;
+    --green: #b8f0a0;
+    --text: #e8ebee;
+    --muted: #8a949e;
+    --mono: 'DM Mono', monospace;
+    --serif: 'Fraunces', serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 14px;
+    line-height: 1.5;
+    min-height: 100vh;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 20px 14px 40px;
+  }
+  .box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 24px 20px;
+    width: 100%;
+    max-width: 440px;
+  }
+  .logo { font-family: var(--serif); font-size: 24px; font-weight: 300; color: var(--accent); margin-bottom: 2px; }
+  .logo span { color: var(--muted); font-style: italic; }
+  .subtitle { font-size: 12px; color: var(--muted); margin-bottom: 16px; }
+  .progreso { display: none; margin-bottom: 18px; }
+  .progreso.show { display: block; }
+  .progreso-texto { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+  .progreso-barra { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+  .progreso-barra div { height: 100%; width: 0; background: var(--accent); transition: width 0.25s; }
+  h2 { font-family: var(--serif); font-weight: 300; font-size: 20px; margin-bottom: 6px; }
+  p.lead { font-size: 13px; color: var(--muted); margin-bottom: 16px; }
+  .form-group { margin-bottom: 16px; }
+  label, .etiqueta {
+    display: block;
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 5px;
+  }
+  .opcional { text-transform: none; letter-spacing: 0; opacity: 0.8; }
+  input[type="email"], input[type="password"], input[type="text"], input[type="tel"], select {
+    width: 100%;
+    min-height: 46px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 10px 12px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 16px; /* 16 px: iOS no hace zoom al enfocar */
+  }
+  input:focus, select:focus { outline: none; border-color: var(--accent); }
+  input.mal, select.mal { border-color: var(--warn); }
+  .ayuda { font-size: 12px; color: var(--muted); margin-top: 5px; }
+  .campo-error { font-size: 12px; color: var(--warn); margin-top: 5px; display: none; }
+  .campo-error.show { display: block; }
+  .fila { display: flex; gap: 8px; }
+  .fila > * { min-width: 0; }
+  .fila .corto { flex: 0 0 104px; }
+  .fila .largo { flex: 1; }
+  .code-input { text-align: center; font-size: 22px !important; letter-spacing: 8px; }
+  .btn {
+    display: block;
+    width: 100%;
+    min-height: 48px;
+    padding: 12px;
+    background: var(--accent);
+    color: #0d1a2e;
+    border: none;
+    border-radius: 4px;
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    margin-top: 8px;
+    text-align: center;
+    text-decoration: none;
+    transition: background 0.15s;
+  }
+  .btn:hover { background: #c0e0ff; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+  .btn-ghost:hover { background: transparent; color: var(--text); border-color: var(--muted); }
+  .btn-mini {
+    min-height: 44px; padding: 8px 12px; background: transparent; color: var(--accent);
+    border: 1px solid var(--border); border-radius: 4px; font-family: var(--mono); font-size: 13px; cursor: pointer;
+  }
+  .btn-mini:hover { border-color: var(--accent); }
+  .error {
+    background: #3a1a1a; color: var(--warn); padding: 10px 12px; border-radius: 4px;
+    font-size: 13px; margin-bottom: 14px; border-left: 3px solid var(--warn); display: none;
+  }
+  .error.show { display: block; }
+  .info {
+    background: #1a2a3a; color: var(--accent); padding: 10px 12px; border-radius: 4px;
+    font-size: 13px; margin-bottom: 14px; border-left: 3px solid var(--accent);
+  }
+  .ok { background: #1a2e1a; color: var(--green); border-left-color: var(--green); }
+  .step { display: none; }
+  .step.active { display: block; }
+  details { border: 1px solid var(--border); border-radius: 4px; margin-bottom: 16px; }
+  details summary { cursor: pointer; padding: 13px 12px; font-size: 13px; color: var(--accent); min-height: 44px; }
+  details .dentro { padding: 4px 12px 12px; }
+  .casilla { display: flex; gap: 12px; align-items: flex-start; padding: 10px 0; }
+  .casilla input { flex: 0 0 24px; width: 24px; height: 24px; margin-top: 2px; accent-color: var(--accent); }
+  .casilla label { text-transform: none; letter-spacing: 0; font-size: 14px; color: var(--text); margin: 0; }
+  .ver-texto { background: none; border: none; color: var(--accent); font-family: var(--mono); font-size: 13px; text-decoration: underline; cursor: pointer; padding: 10px 0 10px 36px; min-height: 44px; }
+  .texto-legal {
+    display: none; background: var(--bg); border: 1px solid var(--border); border-radius: 4px;
+    padding: 12px 14px; font-size: 13px; color: var(--text); margin: 0 0 10px; max-height: 320px; overflow-y: auto;
+  }
+  .texto-legal.show { display: block; }
+  .texto-legal h3 { font-family: var(--serif); font-weight: 600; font-size: 15px; margin-bottom: 8px; }
+  .texto-legal ol, .texto-legal ul { padding-left: 20px; }
+  .texto-legal li { margin-bottom: 6px; }
+  .texto-legal p { margin-bottom: 8px; }
+  .borrador { font-size: 11px; color: var(--accent2); margin-bottom: 8px; }
+  .resumen { background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 10px 12px; font-size: 13px; margin-bottom: 14px; }
+  .resumen div { display: flex; justify-content: space-between; gap: 12px; padding: 2px 0; }
+  .resumen span:first-child { color: var(--muted); flex: 0 0 auto; }
+  .resumen span:last-child { text-align: right; word-break: break-word; }
+  .qr-box { text-align: center; background: white; padding: 14px; border-radius: 8px; margin-bottom: 12px; }
+  .qr-box img { max-width: 100%; height: auto; display: block; margin: 0 auto; }
+  .secret-text {
+    font-size: 13px; color: var(--muted); background: var(--bg); padding: 10px 12px; border-radius: 4px;
+    word-break: break-all; margin-bottom: 12px; border: 1px solid var(--border);
+  }
+  .secret-text strong { color: var(--accent); display: block; margin-top: 4px; letter-spacing: 1px; }
+  .tarjeta { border: 1px solid var(--border); border-radius: 6px; padding: 14px; margin-bottom: 12px; background: var(--bg); }
+  .tarjeta h3 { font-family: var(--serif); font-weight: 600; font-size: 16px; margin-bottom: 2px; }
+  .tarjeta .quien { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+  .tarjeta .btn { margin-top: 8px; }
+  .pasos-lista { padding-left: 20px; font-size: 13px; color: var(--muted); margin-bottom: 14px; }
+  .pasos-lista li { margin-bottom: 4px; }
+  .trampa { position: absolute; left: -9999px; top: auto; width: 1px; height: 1px; overflow: hidden; }
+  .footer-note { margin-top: 16px; text-align: center; font-size: 12px; color: var(--muted); }
+  .footer-note a { color: var(--accent); }
+</style>
+</head>
+<body>
+  <div class="box">
+    <div class="logo">Flota <span>piloto</span></div>
+    <div class="subtitle">Inscripción por invitación</div>
+
+    <div class="progreso" id="progreso">
+      <div class="progreso-texto" id="progreso-texto"></div>
+      <div class="progreso-barra"><div id="progreso-barra"></div></div>
+    </div>
+
+    <div class="error" id="error" role="alert"></div>
+
+    <!-- Comprobando la invitación -->
+    <div class="step active" id="step-cargando">
+      <p class="lead">Comprobando su invitación…</p>
+    </div>
+
+    <!-- Inscripción apagada en esta instancia -->
+    <div class="step" id="step-nodisponible">
+      <h2>La inscripción no está disponible</h2>
+      <div class="footer-note"><a href="/inicio.html">Volver al inicio</a></div>
+    </div>
+
+    <!-- Paso 1: código de invitación -->
+    <div class="step" id="step-codigo">
+      <h2>Su invitación</h2>
+      <p class="lead">Para inscribirse necesita el código que le enviaron. Si abrió el enlace de la invitación, el código ya viene incluido.</p>
+      <div class="form-group">
+        <label for="codigo">Código de invitación</label>
+        <input type="text" id="codigo" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="100">
+        <div class="campo-error" data-error="codigo"></div>
+      </div>
+      <button class="btn" id="btn-codigo" type="button">Continuar</button>
+      <div class="footer-note">¿Ya tiene cuenta? <a href="/login.html">Ingrese aquí</a> · <a href="/inicio.html">Cómo funciona</a></div>
+    </div>
+
+    <!-- Paso 2: datos del dueño o la empresa -->
+    <div class="step" id="step-datos">
+      <h2>Sus datos</h2>
+      <p class="lead">Con estos datos se crea su cuenta de administrador.</p>
+      <div class="info ok" id="invitacion-ok" style="display:none"></div>
+      <div class="form-group">
+        <label for="empresa_nombre">Empresa o nombre del dueño</label>
+        <input type="text" id="empresa_nombre" autocomplete="organization" maxlength="120">
+        <div class="campo-error" data-error="empresa_nombre"></div>
+      </div>
+      <div class="form-group">
+        <span class="etiqueta">Documento</span>
+        <div class="fila">
+          <select id="documento_tipo" class="corto" aria-label="Tipo de documento">
+            <option value="NIT">NIT</option>
+            <option value="CC">Cédula</option>
+          </select>
+          <input type="text" id="documento" class="largo" inputmode="numeric" autocomplete="off" maxlength="18" aria-label="Número de documento" placeholder="Número">
+        </div>
+        <div class="ayuda">Solo números. El NIT puede llevar el guion y el dígito de verificación.</div>
+        <div class="campo-error" data-error="documento_tipo"></div>
+        <div class="campo-error" data-error="documento"></div>
+      </div>
+      <div class="form-group">
+        <label for="correo">Correo</label>
+        <input type="email" id="correo" autocomplete="email" autocapitalize="none" maxlength="254" placeholder="correo@empresa.com">
+        <div class="ayuda">Con este correo va a ingresar al tablero.</div>
+        <div class="campo-error" data-error="correo"></div>
+      </div>
+      <div class="form-group">
+        <label for="celular">Celular</label>
+        <input type="tel" id="celular" inputmode="numeric" autocomplete="tel-national" maxlength="16" placeholder="3001234567">
+        <div class="campo-error" data-error="celular"></div>
+      </div>
+      <div class="form-group">
+        <label for="password">Contraseña</label>
+        <div class="fila">
+          <input type="password" id="password" class="largo" autocomplete="new-password" maxlength="128">
+          <button class="btn-mini" type="button" id="btn-ver-password" aria-pressed="false">Mostrar</button>
+        </div>
+        <div class="ayuda">Mínimo 10 caracteres, con letras y números. No use la de su correo ni la del banco.</div>
+        <div class="campo-error" data-error="password"></div>
+      </div>
+      <div class="form-group">
+        <label for="password2">Repita la contraseña</label>
+        <input type="password" id="password2" autocomplete="new-password" maxlength="128">
+        <div class="campo-error" data-error="password2"></div>
+      </div>
+      <button class="btn" id="btn-datos" type="button">Siguiente</button>
+    </div>
+
+    <!-- Paso 3: la mula del piloto y el conductor -->
+    <div class="step" id="step-mula">
+      <h2>La mula del piloto</h2>
+      <p class="lead">Escriba la placa del cabezote con el que va a probar. Puede agregar hasta tres.</p>
+      <div class="form-group">
+        <span class="etiqueta">Placa</span>
+        <div id="placas-lista"></div>
+        <div class="campo-error" data-error="placas"></div>
+        <button class="btn-mini" type="button" id="btn-otra-placa" style="margin-top:8px">+ Agregar otra placa</button>
+      </div>
+
+      <details id="det-conductor">
+        <summary>Conductor <span class="opcional">(opcional)</span></summary>
+        <div class="dentro">
+          <div class="ayuda" style="margin:0 0 12px">Sirve para ponerle nombre a su enlace de Telegram. El conductor da su propia autorización de datos en el bot.</div>
+          <div class="form-group">
+            <label for="conductor_nombre">Nombre del conductor</label>
+            <input type="text" id="conductor_nombre" autocomplete="off" maxlength="80">
+            <div class="campo-error" data-error="conductor.nombre"></div>
+          </div>
+          <div class="form-group">
+            <label for="conductor_celular">Celular del conductor <span class="opcional">(opcional)</span></label>
+            <input type="tel" id="conductor_celular" inputmode="numeric" autocomplete="off" maxlength="16">
+            <div class="campo-error" data-error="conductor.celular"></div>
+          </div>
+          <div class="campo-error" data-error="conductor"></div>
+        </div>
+      </details>
+
+      <div class="form-group">
+        <label for="transportadoras">Transportadoras con las que carga <span class="opcional">(opcional)</span></label>
+        <input type="text" id="transportadoras" autocomplete="off" maxlength="900" placeholder="Separadas por comas">
+        <div class="ayuda">Ayuda a leer mejor sus manifiestos.</div>
+        <div class="campo-error" data-error="transportadoras"></div>
+      </div>
+      <button class="btn" id="btn-mula" type="button">Siguiente</button>
+      <button class="btn btn-ghost" type="button" data-volver="step-datos">Volver</button>
+    </div>
+
+    <!-- Paso 4: términos y tratamiento de datos -->
+    <div class="step" id="step-terminos">
+      <h2>Términos del piloto</h2>
+      <p class="lead">Revise sus datos y acepte las dos condiciones para terminar.</p>
+      <div class="resumen" id="resumen"></div>
+
+      <div class="casilla">
+        <input type="checkbox" id="acepta_terminos">
+        <label for="acepta_terminos">Acepto los términos del piloto</label>
+      </div>
+      <button class="ver-texto" type="button" data-texto="texto-terminos" aria-expanded="false">Leer los términos del piloto</button>
+      <div class="texto-legal" id="texto-terminos">
+        <!-- TEXTO PENDIENTE DE APROBACIÓN DEL DUEÑO -->
+        <div class="borrador">Borrador. Versión <span data-version></span>.</div>
+        <h3>Términos del piloto</h3>
+        <ol>
+          <li><strong>Es una prueba y es gratis.</strong> Durante el piloto no se le cobra nada. Si más adelante el servicio llega a tener costo, se le avisa antes y usted decide si sigue.</li>
+          <li><strong>Sus datos son suyos.</strong> Los recibos, manifiestos, viajes y gastos que usted o su conductor suban le pertenecen a usted.</li>
+          <li><strong>Solo se usan para prestarle el servicio.</strong> Se usan para leer sus documentos y mostrarle sus cuentas. No se venden ni se comparten con otras empresas de transporte.</li>
+          <li><strong>Puede pedir que se borren.</strong> Cuando quiera puede retirarse y pedir una copia o el borrado de su información.</li>
+          <li><strong>No es asesoría contable ni tributaria.</strong> La aplicación organiza su información y hace cálculos de apoyo. No reemplaza a su contador y nada de lo que muestra es un concepto contable o tributario firmado.</li>
+          <li><strong>La lectura es automática y puede equivocarse.</strong> Revise los valores antes de usarlos para pagar, facturar o declarar.</li>
+          <li><strong>Es un piloto.</strong> Puede tener fallas o pausas, y puede terminar en cualquier momento con aviso previo.</li>
+        </ol>
+        <!-- FIN DEL TEXTO PENDIENTE DE APROBACIÓN DEL DUEÑO -->
+      </div>
+      <div class="campo-error" data-error="acepta_terminos"></div>
+
+      <div class="casilla">
+        <input type="checkbox" id="acepta_datos">
+        <label for="acepta_datos">Autorizo el tratamiento de mis datos personales (Ley 1581 de 2012)</label>
+      </div>
+      <button class="ver-texto" type="button" data-texto="texto-datos" aria-expanded="false">Leer la autorización de datos</button>
+      <div class="texto-legal" id="texto-datos">
+        <!-- TEXTO PENDIENTE DE APROBACIÓN DEL DUEÑO -->
+        <div class="borrador">Borrador. Falta completar quién es el responsable y su canal de contacto.</div>
+        <h3>Autorización de tratamiento de datos personales</h3>
+        <p>De acuerdo con la Ley 1581 de 2012 y sus normas reglamentarias, autorizo de manera previa, expresa e informada al responsable de este piloto para recolectar, guardar y usar mis datos personales.</p>
+        <p><strong>Qué datos:</strong> nombre o razón social, NIT o cédula, correo, celular, placas de los vehículos, y la información de los recibos, facturas y manifiestos que se envíen a la aplicación.</p>
+        <p><strong>Para qué:</strong> crear y proteger mi cuenta, leer y organizar mis documentos, mostrarme mis gastos y viajes, y escribirme sobre el funcionamiento del piloto. No se usan para publicidad ni se entregan a terceros para fines distintos.</p>
+        <p><strong>Proveedores técnicos:</strong> la información se guarda y se procesa con proveedores de nube y de lectura automática de documentos, que pueden estar fuera de Colombia, solo para prestar este servicio.</p>
+        <p><strong>Mis derechos:</strong> puedo conocer, actualizar y corregir mis datos, pedir prueba de esta autorización, revocarla y pedir que se borren, y presentar quejas ante la Superintendencia de Industria y Comercio.</p>
+        <p><strong>Datos de mi conductor:</strong> si registro a un conductor, declaro que le informé. El conductor da su propia autorización al responder /acepto en el bot de Telegram; hasta entonces no se procesan sus fotos.</p>
+        <p><strong>Cómo ejercer mis derechos:</strong> por el canal de contacto que me entregó quien me invitó al piloto.</p>
+        <!-- FIN DEL TEXTO PENDIENTE DE APROBACIÓN DEL DUEÑO -->
+      </div>
+      <div class="campo-error" data-error="acepta_datos"></div>
+      <div class="campo-error" data-error="version_terminos"></div>
+
+      <!-- Trampa para robots: fuera de la vista y de la tabulación -->
+      <div class="trampa" aria-hidden="true">
+        <label for="sitio_web">No llene este campo</label>
+        <input type="text" id="sitio_web" name="sitio_web" tabindex="-1" autocomplete="off">
+      </div>
+
+      <button class="btn" id="btn-enviar" type="button" style="margin-top:14px">Inscribirme</button>
+      <button class="btn btn-ghost" type="button" data-volver="step-mula">Volver</button>
+    </div>
+
+    <!-- Verificación en dos pasos -->
+    <div class="step" id="step-2fa">
+      <h2>Proteja su cuenta</h2>
+      <div class="info ok">Su cuenta quedó creada. Falta un paso de seguridad.</div>
+      <p class="lead">Además de la contraseña, el tablero pide un código de 6 dígitos que cambia cada medio minuto. Tiene 20 minutos para este paso.</p>
+      <div id="dosfa-cuerpo">
+        <ol class="pasos-lista">
+          <li>Instale Google Authenticator (u otra aplicación de códigos) en su celular.</li>
+          <li>Si está en el celular, toque el botón. Si está en un computador, escanee el cuadro.</li>
+          <li>Escriba abajo el código de 6 dígitos que le muestre.</li>
+        </ol>
+        <a class="btn" id="btn-otpauth" style="display:none;margin-bottom:12px">Abrir en mi app de autenticación</a>
+        <div class="qr-box" id="qr-box" style="display:none"></div>
+        <div class="secret-text">Si no puede, escriba esta clave a mano en la aplicación: <strong id="secret-text"></strong></div>
+        <div class="form-group">
+          <label for="codigo-2fa">Código de 6 dígitos</label>
+          <input type="text" id="codigo-2fa" class="code-input" maxlength="6" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code">
+        </div>
+        <button class="btn" id="btn-2fa" type="button">Verificar y activar</button>
+      </div>
+      <div id="dosfa-vencido" style="display:none">
+        <div class="info">El tiempo para este paso se acabó. Su cuenta ya está creada: cuando termine aquí, entre por la página de ingreso con su correo y su contraseña para activar la verificación.</div>
+        <button class="btn" id="btn-2fa-seguir" type="button">Continuar</button>
+      </div>
+    </div>
+
+    <!-- Paso 5: Telegram -->
+    <div class="step" id="step-telegram">
+      <h2>Conecte Telegram</h2>
+      <p class="lead">Las fotos de recibos y manifiestos se envían a un bot de Telegram. Cada persona se conecta una vez con su propio enlace.</p>
+      <div id="vinculos"></div>
+      <div class="info" id="aviso-vinculos" style="display:none"></div>
+      <button class="btn" id="btn-telegram" type="button">Ya conecté Telegram</button>
+      <button class="btn btn-ghost" id="btn-telegram-luego" type="button">Lo hago después</button>
+    </div>
+
+    <!-- Final -->
+    <div class="step" id="step-final">
+      <h2>Listo</h2>
+      <div class="info ok" id="final-mensaje"></div>
+      <ol class="pasos-lista">
+        <li>Envíe al bot la foto de un recibo o de un manifiesto.</li>
+        <li>En unos segundos el bot le responde con lo que leyó.</li>
+        <li>Mire sus gastos y viajes en el tablero.</li>
+      </ol>
+      <a class="btn" id="btn-final" href="/login.html">Ir al tablero</a>
+      <div class="footer-note" id="final-nota"></div>
+    </div>
+  </div>
+
+<script>
+// Producción se sirve desde Pages y dominios propios: usa la URL fija de su API.
+const API_PRODUCCION = 'https://tractomulas-gastos.ddropero.workers.dev';
+// Lista cerrada de hosts de producción (Pages y dominios propios de la instancia de producción).
+// Cualquier otro host habla SOLO con su propio origen: una instancia nueva nunca envía datos a la API de producción.
+// Un dominio nuevo de producción hay que agregarlo aquí.
+const HOSTS_PRODUCCION = ['flota.davidduque.com', 'tractomulas.davidduque.com'];
+const WORKER_URL = (location.protocol === 'file:' || HOSTS_PRODUCCION.includes(location.hostname) || location.hostname.endsWith('.pages.dev'))
+  ? API_PRODUCCION : location.origin;
+
+function tokenHeader() {
+  let t = null;
+  try { t = localStorage.getItem('session_token'); } catch {}
+  return t ? { 'Authorization': `Bearer ${t}` } : {};
+}
+
+async function cargarConfig() {
+  try {
+    // Con tope de espera: una petición colgada no puede dejar la página sin arrancar
+    const tope = (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) ? AbortSignal.timeout(6000) : undefined;
+    const r = await fetch(`${WORKER_URL}/api/config-publica`, { headers: tokenHeader(), signal: tope });
+    if (r.ok) return await r.json();
+  } catch {}
+  return null;
+}
+
+// ── QR local (sin librerías ni servicios externos) ───────────
+// Modo byte, corrección de errores L, versiones 1 a 10 (hasta 271 bytes).
+// Devuelve una matriz de booleanos, o null si el texto no cabe.
+function qrMatriz(texto) {
+  const datos = Array.from(new TextEncoder().encode(texto));
+  // Por versión: [codewords EC por bloque, bloques grupo 1, datos por bloque g1, bloques grupo 2, datos por bloque g2]
+  const TABLA = [null, [7,1,19,0,0], [10,1,34,0,0], [15,1,55,0,0], [20,1,80,0,0], [26,1,108,0,0],
+    [18,2,68,0,0], [20,2,78,0,0], [24,2,97,0,0], [30,2,116,0,0], [18,2,68,2,69]];
+  const ALINEA = [null, [], [6,18], [6,22], [6,26], [6,30], [6,34], [6,22,38], [6,24,42], [6,26,46], [6,28,50]];
+  let ver = 0, capacidad = 0;
+  for (let v = 1; v <= 10; v++) {
+    const t = TABLA[v];
+    capacidad = t[1] * t[2] + t[3] * t[4];
+    const cabecera = 4 + (v < 10 ? 8 : 16);
+    if (datos.length * 8 + cabecera <= capacidad * 8) { ver = v; break; }
+  }
+  if (!ver) return null;
+  const [ecLen, b1, d1, b2, d2] = TABLA[ver];
+
+  // Flujo de bits: modo byte, longitud, datos, terminador y relleno
+  const bits = [];
+  const poner = (valor, n) => { for (let i = n - 1; i >= 0; i--) bits.push((valor >>> i) & 1); };
+  poner(4, 4);
+  poner(datos.length, ver < 10 ? 8 : 16);
+  datos.forEach(b => poner(b, 8));
+  poner(0, Math.min(4, capacidad * 8 - bits.length));
+  while (bits.length % 8) bits.push(0);
+  const cw = [];
+  for (let i = 0; i < bits.length; i += 8) cw.push(parseInt(bits.slice(i, i + 8).join(''), 2));
+  for (let pad = 0xEC; cw.length < capacidad; pad ^= 0xEC ^ 0x11) cw.push(pad);
+
+  // Reed-Solomon sobre GF(256), polinomio 0x11D
+  const EXP = new Array(512), LOG = new Array(256);
+  for (let i = 0, x = 1; i < 255; i++) { EXP[i] = x; LOG[x] = i; x <<= 1; if (x & 0x100) x ^= 0x11D; }
+  for (let i = 255; i < 512; i++) EXP[i] = EXP[i - 255];
+  const mul = (a, b) => (a && b) ? EXP[LOG[a] + LOG[b]] : 0;
+  let gen = [1];
+  for (let i = 0; i < ecLen; i++) {
+    const sig = new Array(gen.length + 1).fill(0);
+    for (let j = 0; j < gen.length; j++) { sig[j] ^= gen[j]; sig[j + 1] ^= mul(gen[j], EXP[i]); }
+    gen = sig;
+  }
+  const rs = (bloque) => {
+    const res = new Array(ecLen).fill(0);
+    for (const b of bloque) {
+      const f = b ^ res.shift();
+      res.push(0);
+      for (let j = 0; j < ecLen; j++) res[j] ^= mul(gen[j + 1], f);
+    }
+    return res;
+  };
+  const bloques = [], ecs = [];
+  for (let i = 0, pos = 0; i < b1 + b2; i++) {
+    const n = i < b1 ? d1 : d2;
+    const bloque = cw.slice(pos, pos + n); pos += n;
+    bloques.push(bloque); ecs.push(rs(bloque));
+  }
+  const final = [];
+  for (let i = 0; i < Math.max(d1, d2); i++) bloques.forEach(b => { if (i < b.length) final.push(b[i]); });
+  for (let i = 0; i < ecLen; i++) ecs.forEach(e => final.push(e[i]));
+
+  // Matriz y patrones de función
+  const n = ver * 4 + 17;
+  const m = Array.from({ length: n }, () => new Array(n).fill(false));
+  const fn = Array.from({ length: n }, () => new Array(n).fill(false));
+  const fijar = (x, y, oscuro) => { m[y][x] = oscuro; fn[y][x] = true; };
+  for (let i = 0; i < n; i++) { fijar(6, i, i % 2 === 0); fijar(i, 6, i % 2 === 0); }
+  const buscador = (cx, cy) => {
+    for (let dy = -4; dy <= 4; dy++) for (let dx = -4; dx <= 4; dx++) {
+      const x = cx + dx, y = cy + dy, d = Math.max(Math.abs(dx), Math.abs(dy));
+      if (x >= 0 && x < n && y >= 0 && y < n) fijar(x, y, d !== 2 && d !== 4);
+    }
+  };
+  buscador(3, 3); buscador(n - 4, 3); buscador(3, n - 4);
+  const al = ALINEA[ver];
+  for (let i = 0; i < al.length; i++) for (let j = 0; j < al.length; j++) {
+    if ((i === 0 && j === 0) || (i === 0 && j === al.length - 1) || (i === al.length - 1 && j === 0)) continue;
+    for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
+      fijar(al[i] + dx, al[j] + dy, Math.max(Math.abs(dx), Math.abs(dy)) !== 1);
+    }
+  }
+  const formato = (mascara) => {
+    const d = (1 << 3) | mascara; // nivel L = 01
+    let rem = d;
+    for (let i = 0; i < 10; i++) rem = (rem << 1) ^ ((rem >>> 9) * 0x537);
+    const b = ((d << 10) | rem) ^ 0x5412;
+    const bit = (i) => ((b >>> i) & 1) !== 0;
+    for (let i = 0; i <= 5; i++) fijar(8, i, bit(i));
+    fijar(8, 7, bit(6)); fijar(8, 8, bit(7)); fijar(7, 8, bit(8));
+    for (let i = 9; i < 15; i++) fijar(14 - i, 8, bit(i));
+    for (let i = 0; i < 8; i++) fijar(n - 1 - i, 8, bit(i));
+    for (let i = 8; i < 15; i++) fijar(8, n - 15 + i, bit(i));
+    fijar(8, n - 8, true);
+  };
+  formato(0);
+  if (ver >= 7) {
+    let rem = ver;
+    for (let i = 0; i < 12; i++) rem = (rem << 1) ^ ((rem >>> 11) * 0x1F25);
+    const b = (ver << 12) | rem;
+    for (let i = 0; i < 18; i++) {
+      const oscuro = ((b >>> i) & 1) !== 0, a = n - 11 + (i % 3), c = Math.floor(i / 3);
+      fijar(a, c, oscuro); fijar(c, a, oscuro);
+    }
+  }
+
+  // Colocación de datos en zigzag
+  let k = 0;
+  for (let der = n - 1; der >= 1; der -= 2) {
+    if (der === 6) der = 5;
+    for (let v = 0; v < n; v++) for (let j = 0; j < 2; j++) {
+      const x = der - j, sube = ((der + 1) & 2) === 0, y = sube ? n - 1 - v : v;
+      if (!fn[y][x] && k < final.length * 8) { m[y][x] = ((final[k >>> 3] >>> (7 - (k & 7))) & 1) !== 0; k++; }
+    }
+  }
+
+  // Máscara: se prueba cada una y se queda la de menor penalización
+  const MASCARAS = [
+    (x, y) => (x + y) % 2 === 0, (x, y) => y % 2 === 0, (x, y) => x % 3 === 0, (x, y) => (x + y) % 3 === 0,
+    (x, y) => (Math.floor(x / 3) + Math.floor(y / 2)) % 2 === 0, (x, y) => (x * y) % 2 + (x * y) % 3 === 0,
+    (x, y) => ((x * y) % 2 + (x * y) % 3) % 2 === 0, (x, y) => ((x + y) % 2 + (x * y) % 3) % 2 === 0];
+  const aplicar = (i) => { for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) if (!fn[y][x] && MASCARAS[i](x, y)) m[y][x] = !m[y][x]; };
+  const penal = () => {
+    let p = 0, oscuros = 0;
+    const linea = (get) => {
+      let racha = 1;
+      for (let i = 1; i < n; i++) {
+        if (get(i) === get(i - 1)) { racha++; if (racha === 5) p += 3; else if (racha > 5) p++; } else racha = 1;
+      }
+      for (let i = 0; i + 10 < n; i++) {
+        const s = [0,1,2,3,4,5,6,7,8,9,10].map(d => get(i + d) ? 1 : 0).join('');
+        if (s === '10111010000' || s === '00001011101') p += 40;
+      }
+    };
+    for (let i = 0; i < n; i++) { linea(j => m[i][j]); linea(j => m[j][i]); }
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+      if (m[y][x]) oscuros++;
+      if (x + 1 < n && y + 1 < n && m[y][x] === m[y][x + 1] && m[y][x] === m[y + 1][x] && m[y][x] === m[y + 1][x + 1]) p += 3;
+    }
+    return p + Math.floor(Math.abs(oscuros * 20 - n * n * 10) / (n * n)) * 10;
+  };
+  let mejor = 0, minimo = Infinity;
+  for (let i = 0; i < 8; i++) {
+    aplicar(i); formato(i);
+    const p = penal();
+    if (p < minimo) { minimo = p; mejor = i; }
+    aplicar(i);
+  }
+  aplicar(mejor); formato(mejor);
+  return m;
+}
+
+// Dibuja el QR como SVG dentro de un elemento. Devuelve false si no se pudo.
+function dibujarQR(el, texto) {
+  const m = qrMatriz(texto);
+  if (!m) return false;
+  const n = m.length, borde = 4;
+  let d = '';
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) if (m[y][x]) d += `M${x + borde},${y + borde}h1v1h-1z`;
+  const t = n + borde * 2;
+  el.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${t} ${t}" role="img" aria-label="Código QR" shape-rendering="crispEdges" style="width:100%;max-width:220px;height:auto;display:block;margin:0 auto"><rect width="${t}" height="${t}" fill="#fff"/><path d="${d}" fill="#000"/></svg>`;
+  return true;
+}
+
+// ── Estado: todo vive solo en la memoria de esta página ──────
+let codigo = '';
+let versionTerminos = 'piloto-v1';
+let tempToken = null;        // nunca se guarda en localStorage
+let tempVence = 0;
+let haySesion = false;
+let respuesta = null;        // respuesta de POST /api/inscripcion (trae los enlaces, una sola vez)
+let esperaHasta = 0;
+
+const $ = (id) => document.getElementById(id);
+const PASOS = {
+  'step-codigo':   [1, 'Su invitación'],
+  'step-datos':    [2, 'Sus datos'],
+  'step-mula':     [3, 'La mula y el conductor'],
+  'step-terminos': [4, 'Términos'],
+  'step-2fa':      [5, 'Seguridad y Telegram'],
+  'step-telegram': [5, 'Seguridad y Telegram'],
+  'step-final':    [5, 'Listo'],
+};
+const CAMPO_PASO = {
+  codigo: 'step-codigo',
+  empresa_nombre: 'step-datos', documento_tipo: 'step-datos', documento: 'step-datos',
+  correo: 'step-datos', celular: 'step-datos', password: 'step-datos', password2: 'step-datos',
+  placas: 'step-mula', conductor: 'step-mula', transportadoras: 'step-mula',
+  acepta_terminos: 'step-terminos', acepta_datos: 'step-terminos', version_terminos: 'step-terminos',
+};
+const CAMPO_INPUT = { 'conductor.nombre': 'conductor_nombre', 'conductor.celular': 'conductor_celular' };
+
+function showStep(id) {
+  document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+  $(id).classList.add('active');
+  const p = PASOS[id];
+  $('progreso').classList.toggle('show', !!p);
+  if (p) {
+    $('progreso-texto').textContent = `Paso ${p[0]} de 5 · ${p[1]}`;
+    $('progreso-barra').style.width = `${p[0] * 20}%`;
+  }
+  window.scrollTo(0, 0);
+}
+function showError(msg) { const el = $('error'); el.textContent = msg; el.classList.add('show'); el.scrollIntoView({ block: 'nearest' }); }
+function hideError() { $('error').classList.remove('show'); }
+
+function limpiarErrores() {
+  hideError();
+  document.querySelectorAll('.campo-error').forEach(e => { e.textContent = ''; e.classList.remove('show'); });
+  document.querySelectorAll('.mal').forEach(e => e.classList.remove('mal'));
+}
+// Muestra el motivo junto al campo. Devuelve false si no hay dónde ponerlo.
+function errorCampo(campo, motivo) {
+  let clave = String(campo);
+  let el = document.querySelector(`.campo-error[data-error="${CSS.escape(clave)}"]`);
+  if (!el) { clave = clave.split(/[.\[]/)[0]; el = document.querySelector(`.campo-error[data-error="${CSS.escape(clave)}"]`); }
+  if (!el) return false;
+  el.textContent = String(motivo || 'Revise este campo').slice(0, 200);
+  el.classList.add('show');
+  const input = $(CAMPO_INPUT[campo] || clave);
+  if (input) input.classList.add('mal');
+  if (clave === 'conductor') $('det-conductor').open = true;
+  return true;
+}
+function enfocarPrimerError(pasoId) {
+  const el = $(pasoId).querySelector('.campo-error.show');
+  if (el) el.scrollIntoView({ block: 'center' });
+}
+
+// Hora del servidor (UTC, "YYYY-MM-DD HH:MM:SS") mostrada en hora de Colombia
+function fechaCO(s) {
+  if (!s) return '';
+  const d = new Date(String(s).replace(' ', 'T') + (/[zZ]|[+-]\d\d:?\d\d$/.test(s) ? '' : 'Z'));
+  if (isNaN(d)) return String(s);
+  return d.toLocaleString('es-CO', { timeZone: 'America/Bogota', weekday: 'long', day: 'numeric', month: 'long', hour: 'numeric', minute: '2-digit' });
+}
+function esperaTexto(seg) {
+  const s = Math.max(1, Math.ceil(Number(seg) || 60));
+  if (s < 90) return `${s} segundos`;
+  const m = Math.ceil(s / 60);
+  return m < 90 ? `${m} minutos` : `${Math.ceil(m / 60)} horas`;
+}
+// Mensaje del servidor apto para mostrar: nunca detalles internos
+function mensajeServidor(res, data, porDefecto) {
+  if (res.status === 429) return `Demasiados intentos. Espere ${esperaTexto(data && data.retry_after_s)} y vuelva a intentar.`;
+  if (res.status >= 500) return 'No pudimos completar la solicitud. Intente de nuevo en unos minutos.';
+  const e = data && typeof data.error === 'string' ? data.error.trim() : '';
+  return (e && e.length <= 160 && !/[<>{}]|\bat\s|exception|sql|d1_|stack/i.test(e)) ? e : porDefecto;
+}
+async function postJSON(ruta, cuerpo, token) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const res = await fetch(`${WORKER_URL}${ruta}`, { method: 'POST', headers, body: cuerpo === undefined ? undefined : JSON.stringify(cuerpo) });
+  let data = null;
+  try { data = await res.json(); } catch {}
+  return { res, data: data || {} };
+}
+function ocupado(btn, texto) {
+  const original = btn.textContent;
+  btn.disabled = true; btn.textContent = texto;
+  return () => { btn.disabled = false; btn.textContent = original; };
+}
+// Con 429 el botón queda deshabilitado hasta que pase la espera
+function bloquearPorEspera(btn, seg) {
+  const s = Math.max(1, Math.ceil(Number(seg) || 60));
+  esperaHasta = Date.now() + s * 1000;
+  const original = btn.textContent;
+  btn.disabled = true;
+  const tic = () => {
+    const falta = Math.ceil((esperaHasta - Date.now()) / 1000);
+    if (falta <= 0) { btn.disabled = false; btn.textContent = original; return; }
+    btn.textContent = `Espere ${esperaTexto(falta)}`;
+    setTimeout(tic, falta > 120 ? 30000 : 1000);
+  };
+  tic();
+}
+
+// ── Normalización y validación (las mismas reglas del servidor) ──
+const soloDigitos = (s) => String(s || '').replace(/\D/g, '');
+function normCelular(s) {
+  let d = soloDigitos(s);
+  if (d.length === 12 && d.startsWith('57')) d = d.slice(2);
+  return d;
+}
+const normPlaca = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+const normDocumento = (s) => String(s || '').replace(/[\s.]/g, '');
+const placaBonita = (p) => p.length === 6 ? `${p.slice(0, 3)} ${p.slice(3)}` : p;
+
+function leerDatos() {
+  return {
+    empresa_nombre: $('empresa_nombre').value.trim().replace(/\s+/g, ' '),
+    documento_tipo: $('documento_tipo').value,
+    documento: normDocumento($('documento').value),
+    correo: $('correo').value.trim().toLowerCase(),
+    celular: normCelular($('celular').value),
+    password: $('password').value,
+  };
+}
+function validarDatos() {
+  const d = leerDatos();
+  const e = {};
+  if (d.empresa_nombre.length < 3 || d.empresa_nombre.length > 120) e.empresa_nombre = 'Escriba el nombre de la empresa o del dueño (mínimo 3 letras).';
+  if (!['NIT', 'CC'].includes(d.documento_tipo)) e.documento_tipo = 'Elija NIT o cédula.';
+  if (!/^[0-9-]{5,15}$/.test(d.documento) || !/\d{5}/.test(d.documento.replace(/-/g, ''))) e.documento = 'Solo números (y guion en el NIT), entre 5 y 15 caracteres.';
+  if (d.correo.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(d.correo)) e.correo = 'Revise el correo. Ejemplo: nombre@empresa.com';
+  if (!/^3\d{9}$/.test(d.celular)) e.celular = 'El celular tiene 10 dígitos y empieza por 3.';
+  if (d.password.length < 10) e.password = 'La contraseña debe tener mínimo 10 caracteres.';
+  else if (d.password.length > 128) e.password = 'La contraseña es demasiado larga (máximo 128).';
+  else if (!/[A-Za-zÁÉÍÓÚÑáéíóúñ]/.test(d.password) || !/\d/.test(d.password)) e.password = 'Use letras y números en la contraseña.';
+  else if (d.password.toLowerCase() === d.correo || d.password === d.documento) e.password = 'No use su correo ni su documento como contraseña.';
+  if (!e.password && $('password2').value !== d.password) e.password2 = 'Las dos contraseñas no coinciden.';
+  return e;
+}
+
+function leerMula() {
+  const placas = Array.from(document.querySelectorAll('.placa-input')).map(i => normPlaca(i.value)).filter(Boolean);
+  const nombre = $('conductor_nombre').value.trim().replace(/\s+/g, ' ');
+  const cel = normCelular($('conductor_celular').value);
+  const conductor = (nombre || cel) ? { nombre, ...(cel ? { celular: cel } : {}) } : null;
+  const transportadoras = $('transportadoras').value.split(/[,;\n]/).map(t => t.trim().replace(/\s+/g, ' ')).filter(Boolean);
+  return { placas, conductor, transportadoras };
+}
+function validarMula() {
+  const m = leerMula();
+  const e = {};
+  if (!m.placas.length) e.placas = 'Escriba al menos una placa.';
+  else if (m.placas.length > 3) e.placas = 'En el piloto se pueden inscribir máximo 3 placas.';
+  else if (m.placas.some(p => !/^[A-Z]{3}\d{3}$/.test(p))) e.placas = 'La placa del cabezote son 3 letras y 3 números. Ejemplo: ABC123.';
+  else if (new Set(m.placas).size !== m.placas.length) e.placas = 'Hay una placa repetida.';
+  if (m.conductor) {
+    if (m.conductor.nombre.length < 3 || m.conductor.nombre.length > 80) e['conductor.nombre'] = 'Escriba el nombre del conductor (mínimo 3 letras) o deje los dos campos vacíos.';
+    if (m.conductor.celular && !/^3\d{9}$/.test(m.conductor.celular)) e['conductor.celular'] = 'El celular tiene 10 dígitos y empieza por 3.';
+  }
+  if (m.transportadoras.length > 10) e.transportadoras = 'Máximo 10 transportadoras.';
+  else if (m.transportadoras.some(t => t.length > 80)) e.transportadoras = 'Cada nombre puede tener máximo 80 caracteres.';
+  return e;
+}
+function pintarErrores(e, pasoId) {
+  const claves = Object.keys(e);
+  claves.forEach(k => errorCampo(k, e[k]));
+  if (claves.length) { showStep(pasoId); enfocarPrimerError(pasoId); }
+  return claves.length === 0;
+}
+
+// ── Placas: un campo, hasta tres ─────────────────────────────
+function agregarPlaca(valor) {
+  const lista = $('placas-lista');
+  if (lista.children.length >= 3) return;
+  const fila = document.createElement('div');
+  fila.className = 'fila';
+  fila.style.marginBottom = '8px';
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'placa-input largo';
+  input.maxLength = 7;
+  input.autocomplete = 'off';
+  input.autocapitalize = 'characters';
+  input.spellcheck = false;
+  input.placeholder = 'ABC123';
+  input.setAttribute('aria-label', `Placa ${lista.children.length + 1}`);
+  input.value = valor || '';
+  input.addEventListener('input', () => {
+    const p = normPlaca(input.value).slice(0, 6);
+    if (input.value !== p) input.value = p;
+  });
+  fila.appendChild(input);
+  if (lista.children.length > 0) {
+    const quitar = document.createElement('button');
+    quitar.type = 'button';
+    quitar.className = 'btn-mini';
+    quitar.textContent = 'Quitar';
+    quitar.onclick = () => { fila.remove(); actualizarBotonPlaca(); };
+    fila.appendChild(quitar);
+  }
+  lista.appendChild(fila);
+  actualizarBotonPlaca();
+}
+function actualizarBotonPlaca() {
+  $('btn-otra-placa').style.display = $('placas-lista').children.length >= 3 ? 'none' : '';
+}
+
+// ── Paso 1: invitación ───────────────────────────────────────
+function leerCodigoDeLaUrl() {
+  let c = '';
+  const h = /(?:^#|&)c=([^&]+)/.exec(location.hash);
+  if (h) c = h[1];
+  if (!c) c = new URLSearchParams(location.search).get('codigo') || '';
+  try { c = decodeURIComponent(c); } catch {}
+  // El código no se deja en la barra de direcciones ni en el historial
+  if (location.hash || location.search) {
+    try { history.replaceState(null, '', location.pathname); } catch {}
+  }
+  return c.trim();
+}
+
+async function validarCodigo(valor, desdeEnlace) {
+  limpiarErrores();
+  const c = String(valor || '').trim();
+  if (c.length < 6 || c.length > 100 || /\s/.test(c)) {
+    showStep('step-codigo');
+    errorCampo('codigo', 'Pegue el código completo, tal como se lo enviaron.');
+    return;
+  }
+  const btn = $('btn-codigo');
+  const listo = ocupado(btn, 'Comprobando…');
+  let enEspera = false;
+  try {
+    const { res, data } = await postJSON('/api/inscripcion/validar', { codigo: c });
+    if (res.ok && data.ok) {
+      codigo = c;
+      $('codigo').value = '';
+      if (data.expira_en) {
+        const ok = $('invitacion-ok');
+        ok.textContent = `Invitación válida. Vence: ${fechaCO(data.expira_en)}`;
+        ok.style.display = '';
+      }
+      showStep('step-datos');
+      $('empresa_nombre').focus();
+      return;
+    }
+    if (res.status === 404) { showStep('step-nodisponible'); return; }
+    showStep('step-codigo');
+    if (desdeEnlace) $('codigo').value = '';
+    if (res.status === 429) { enEspera = true; listo(); bloquearPorEspera(btn, data.retry_after_s); }
+    errorCampo('codigo', mensajeServidor(res, data, 'Invitación inválida o vencida'));
+  } catch {
+    showStep('step-codigo');
+    if (desdeEnlace) $('codigo').value = c;
+    showError('No hay conexión. Revise su internet y vuelva a intentar.');
+  } finally {
+    if (!enEspera) listo();
+  }
+}
+
+// ── Paso 4: resumen y envío ──────────────────────────────────
+function pintarResumen() {
+  const d = leerDatos(), m = leerMula();
+  const filas = [
+    ['Empresa o dueño', d.empresa_nombre],
+    [d.documento_tipo === 'CC' ? 'Cédula' : 'NIT', d.documento],
+    ['Correo', d.correo],
+    ['Celular', d.celular],
+    [m.placas.length > 1 ? 'Placas' : 'Placa', m.placas.map(placaBonita).join(', ')],
+  ];
+  if (m.conductor) filas.push(['Conductor', m.conductor.nombre]);
+  const cont = $('resumen');
+  cont.replaceChildren(...filas.map(([k, v]) => {
+    const fila = document.createElement('div');
+    const a = document.createElement('span'); a.textContent = k;
+    const b = document.createElement('span'); b.textContent = v;
+    fila.append(a, b);
+    return fila;
+  }));
+}
+
+async function enviar() {
+  limpiarErrores();
+  if (Date.now() < esperaHasta) return;
+  if (!pintarErrores(validarDatos(), 'step-datos')) return;
+  if (!pintarErrores(validarMula(), 'step-mula')) return;
+  const eT = {};
+  if (!$('acepta_terminos').checked) eT.acepta_terminos = 'Para inscribirse debe aceptar los términos del piloto.';
+  if (!$('acepta_datos').checked) eT.acepta_datos = 'Para inscribirse debe autorizar el tratamiento de sus datos.';
+  if (!pintarErrores(eT, 'step-terminos')) return;
+
+  const d = leerDatos(), m = leerMula();
+  const cuerpo = {
+    codigo,
+    ...d,
+    placas: m.placas,
+    conductor: m.conductor,
+    transportadoras: m.transportadoras,
+    acepta_terminos: true,
+    acepta_datos: true,
+    version_terminos: versionTerminos,
+    sitio_web: $('sitio_web').value,
+  };
+  const btn = $('btn-enviar');
+  const listo = ocupado(btn, 'Creando su cuenta…');
+  let enEspera = false;
+  try {
+    const { res, data } = await postJSON('/api/inscripcion', cuerpo);
+    if (res.status === 201 && data.ok && !(data.user && data.auth)) {
+      // El servidor no creó la cuenta (el campo oculto llegó lleno, casi siempre por el autocompletado del navegador)
+      $('sitio_web').value = '';
+      showError('No pudimos crear la cuenta. Toque otra vez "Crear mi cuenta"; si vuelve a pasar, recargue la página.');
+      return;
+    }
+    if (res.status === 201 && data.ok) {
+      respuesta = data;
+      $('password').value = ''; $('password2').value = '';
+      codigo = '';
+      await despuesDeInscribir();
+      return;
+    }
+    if (res.status === 404) { showStep('step-nodisponible'); return; }
+    if (res.status === 403) {
+      codigo = '';
+      showStep('step-codigo');
+      errorCampo('codigo', mensajeServidor(res, data, 'Invitación inválida o vencida'));
+      return;
+    }
+    if (res.status === 429) { enEspera = true; listo(); bloquearPorEspera(btn, data.retry_after_s); }
+    // Errores por campo: se muestran junto a cada uno, en su paso
+    let pasoConError = null, sinLugar = false;
+    if (data.campos && typeof data.campos === 'object') {
+      for (const [campo, motivo] of Object.entries(data.campos)) {
+        if (!errorCampo(campo, motivo)) { sinLugar = true; continue; }
+        const paso = CAMPO_PASO[String(campo).split(/[.\[]/)[0]];
+        if (paso && (!pasoConError || PASOS[paso][0] < PASOS[pasoConError][0])) pasoConError = paso;
+      }
+    }
+    if (pasoConError) { showStep(pasoConError); enfocarPrimerError(pasoConError); }
+    if (!pasoConError || sinLugar || res.status !== 400) {
+      let msg = mensajeServidor(res, data, 'No pudimos crear la cuenta. Revise los datos e intente de nuevo.');
+      if (res.status === 413) msg = 'Los datos enviados son demasiado largos. Acorte los textos e intente de nuevo.';
+      showError(msg);
+    }
+  } catch {
+    showError('No hay conexión. Revise su internet y vuelva a intentar. Sus datos siguen en esta página.');
+  } finally {
+    if (!enEspera) listo();
+  }
+}
+
+// ── Verificación en dos pasos ────────────────────────────────
+async function despuesDeInscribir() {
+  const auth = (respuesta && respuesta.auth) || {};
+  if (auth.session_token) {
+    try { localStorage.setItem('session_token', auth.session_token); haySesion = true; } catch {}
+  }
+  if (auth.requiere_2fa && auth.temp_token) {
+    tempToken = auth.temp_token;
+    const vence = Date.parse(auth.expires_at || '');
+    tempVence = isNaN(vence) ? Date.now() + 5 * 60 * 1000 : vence;
+    showStep('step-2fa');
+    await preparar2FA();
+  } else {
+    mostrarTelegram();
+  }
+}
+function vencio2FA() {
+  tempToken = null;
+  $('dosfa-cuerpo').style.display = 'none';
+  $('dosfa-vencido').style.display = '';
+  hideError();
+}
+async function preparar2FA() {
+  try {
+    const { res, data } = await postJSON('/api/auth/setup-2fa', undefined, tempToken);
+    if (res.status === 401) { vencio2FA(); return; }
+    if (!res.ok) { showError(mensajeServidor(res, data, 'No pudimos preparar la verificación.')); vencio2FA(); return; }
+    const uri = String(data.otpauth_uri || '');
+    const box = $('qr-box');
+    if (/^otpauth:\/\//.test(uri)) {
+      if (dibujarQR(box, uri)) box.style.display = '';
+      const abrir = $('btn-otpauth');
+      abrir.href = uri;
+      abrir.style.display = 'block';
+    } else if (typeof data.qr_url === 'string' && /^https:\/\//.test(data.qr_url)) {
+      const img = document.createElement('img');
+      img.alt = 'Código QR';
+      img.src = data.qr_url;
+      box.replaceChildren(img);
+      box.style.display = '';
+    }
+    $('secret-text').textContent = data.secret || '';
+  } catch {
+    showError('No hay conexión. Revise su internet; puede terminar este paso entrando por la página de ingreso.');
+    vencio2FA();
+  }
+}
+async function verificar2FA() {
+  hideError();
+  const code = $('codigo-2fa').value.trim();
+  if (!/^\d{6}$/.test(code)) { showError('Escriba el código de 6 dígitos.'); return; }
+  if (!tempToken || Date.now() > tempVence) { vencio2FA(); return; }
+  const btn = $('btn-2fa');
+  const listo = ocupado(btn, 'Verificando…');
+  try {
+    const { res, data } = await postJSON('/api/auth/verify-2fa', { code }, tempToken);
+    if (res.ok && data.session_token) {
+      try { localStorage.setItem('session_token', data.session_token); haySesion = true; } catch {}
+      tempToken = null;
+      mostrarTelegram();
+      return;
+    }
+    // 401 puede ser código errado o token temporal vencido
+    if (res.status === 401 && /token|sesi[oó]n|unauthorized/i.test(String(data.error || ''))) { vencio2FA(); return; }
+    showError(res.status === 401 ? 'Ese código no es correcto o ya cambió. Escriba el que aparece ahora.' : mensajeServidor(res, data, 'No pudimos verificar el código.'));
+    $('codigo-2fa').value = '';
+    $('codigo-2fa').focus();
+  } catch {
+    showError('No hay conexión. Revise su internet y vuelva a intentar.');
+  } finally {
+    listo();
+  }
+}
+
+// ── Paso 5: Telegram ─────────────────────────────────────────
+const esEnlaceTelegram = (u) => typeof u === 'string' && /^https:\/\/t\.me\/[A-Za-z0-9_]+\?[A-Za-z]+=[^\s"'<>]+$/.test(u);
+
+async function copiar(texto, btn) {
+  const original = btn.textContent;
+  try {
+    await navigator.clipboard.writeText(texto);
+    btn.textContent = 'Copiado';
+  } catch {
+    // Sin permiso de portapapeles: se muestra para copiar a mano
+    window.prompt('Copie el enlace:', texto);
+  }
+  setTimeout(() => { btn.textContent = original; }, 2000);
+}
+
+function tarjetaVinculo(v) {
+  const t = document.createElement('div');
+  t.className = 'tarjeta';
+  const h = document.createElement('h3');
+  const quien = document.createElement('div');
+  quien.className = 'quien';
+  const placa = v.placa ? placaBonita(normPlaca(v.placa)) : '';
+  if (v.rol === 'dueno') {
+    h.textContent = 'Su chat (dueño)';
+    quien.textContent = placa ? `Ábralo en el celular donde tiene Telegram. Mula ${placa}.` : 'Ábralo en el celular donde tiene Telegram.';
+    const abrir = document.createElement('a');
+    abrir.className = 'btn';
+    abrir.href = v.enlace;
+    abrir.target = '_blank';
+    abrir.rel = 'noopener noreferrer';
+    abrir.textContent = 'Abrir Telegram';
+    t.append(h, quien, abrir);
+  } else {
+    h.textContent = `Conductor de ${placa || 'la mula'}`;
+    quien.textContent = (v.nombre && !/^conductor\s+[a-z]{3}\s?\d{3}$/i.test(v.nombre)) ? `${v.nombre}. Envíele este enlace; él lo abre en su Telegram.` : 'Envíele este enlace; él lo abre en su Telegram.';
+    const texto = `Hola. Para enviar las fotos de recibos y manifiestos de la mula ${placa}, abra este enlace en Telegram, toque Iniciar y responda /acepto: ${v.enlace}`;
+    const wa = document.createElement('a');
+    wa.className = 'btn';
+    // Sin número: usted elige el contacto en WhatsApp. El celular del conductor no se envía a ningún servicio.
+    wa.href = `https://wa.me/?text=${encodeURIComponent(texto)}`;
+    wa.target = '_blank';
+    wa.rel = 'noopener noreferrer';
+    wa.textContent = 'Enviar por WhatsApp';
+    const cp = document.createElement('button');
+    cp.type = 'button';
+    cp.className = 'btn btn-ghost';
+    cp.textContent = 'Copiar enlace';
+    cp.onclick = () => copiar(v.enlace, cp);
+    t.append(h, quien, wa, cp);
+  }
+  if (esEnlaceTelegram(v.enlace_grupo)) {
+    const g = document.createElement('button');
+    g.type = 'button';
+    g.className = 'ver-texto';
+    g.style.padding = '10px 0 0';
+    g.textContent = '¿Usa un grupo de Telegram? Copiar enlace para grupo';
+    g.onclick = () => copiar(v.enlace_grupo, g);
+    t.append(g);
+  }
+  return t;
+}
+
+function mostrarTelegram() {
+  hideError();
+  const tg = (respuesta && respuesta.telegram) || {};
+  const vinculos = (Array.isArray(tg.vinculos) ? tg.vinculos : []).filter(v => v && esEnlaceTelegram(v.enlace));
+  const cont = $('vinculos');
+  const aviso = $('aviso-vinculos');
+  if (vinculos.length) {
+    // Primero el dueño, luego los conductores
+    vinculos.sort((a, b) => (a.rol === 'dueno' ? 0 : 1) - (b.rol === 'dueno' ? 0 : 1));
+    cont.replaceChildren(...vinculos.map(tarjetaVinculo));
+    aviso.textContent = `Cada enlace sirve una sola vez${tg.expira_en ? ` (vencen: ${fechaCO(tg.expira_en)})` : ''}. El conductor debe responder /acepto en el bot para autorizar el uso de sus datos; hasta entonces el bot no procesa sus fotos. Los enlaces solo se muestran ahora: si los pierde, genere otros en el tablero, en Vehículos / Telegram.`;
+    $('btn-telegram').style.display = '';
+    $('btn-telegram-luego').textContent = 'Lo hago después';
+  } else {
+    cont.replaceChildren();
+    aviso.textContent = 'El bot de Telegram de esta instancia todavía no está configurado. Quien lo invitó debe terminar esa configuración; después podrá generar los enlaces en el tablero, en Vehículos / Telegram.';
+    $('btn-telegram').style.display = 'none';
+    $('btn-telegram-luego').textContent = 'Continuar';
+  }
+  aviso.style.display = '';
+  showStep('step-telegram');
+}
+
+function rutaLocal(u, porDefecto) {
+  return (typeof u === 'string' && /^\/[A-Za-z0-9._\/-]*$/.test(u) && !u.startsWith('//')) ? u : porDefecto;
+}
+function mostrarFinal() {
+  const sig = (respuesta && respuesta.siguiente) || {};
+  const nombre = (respuesta && respuesta.empresa && respuesta.empresa.nombre) || '';
+  $('final-mensaje').textContent = nombre ? `${nombre} quedó inscrita en el piloto.` : 'Quedó inscrito en el piloto.';
+  const btn = $('btn-final');
+  if (haySesion) {
+    btn.href = rutaLocal(sig.dashboard_url, '/dashboard.html');
+    btn.textContent = 'Ir al tablero';
+    $('final-nota').textContent = '';
+  } else {
+    btn.href = rutaLocal(sig.login_url, '/login.html');
+    btn.textContent = 'Ingresar al tablero';
+    $('final-nota').textContent = 'Ingrese con su correo y su contraseña.';
+  }
+  showStep('step-final');
+}
+
+// ── Eventos ──────────────────────────────────────────────────
+$('btn-codigo').onclick = () => validarCodigo($('codigo').value, false);
+$('codigo').addEventListener('keydown', e => { if (e.key === 'Enter') validarCodigo($('codigo').value, false); });
+$('btn-datos').onclick = () => {
+  limpiarErrores();
+  if (!codigo) { showStep('step-codigo'); return; }
+  if (pintarErrores(validarDatos(), 'step-datos')) { showStep('step-mula'); }
+};
+$('btn-mula').onclick = () => {
+  limpiarErrores();
+  if (pintarErrores(validarMula(), 'step-mula')) { pintarResumen(); showStep('step-terminos'); }
+};
+$('btn-enviar').onclick = enviar;
+$('btn-2fa').onclick = verificar2FA;
+$('codigo-2fa').addEventListener('keydown', e => { if (e.key === 'Enter') verificar2FA(); });
+$('btn-2fa-seguir').onclick = mostrarTelegram;
+$('btn-telegram').onclick = mostrarFinal;
+$('btn-telegram-luego').onclick = mostrarFinal;
+$('btn-otra-placa').onclick = () => { agregarPlaca(''); const ins = document.querySelectorAll('.placa-input'); ins[ins.length - 1].focus(); };
+document.querySelectorAll('[data-volver]').forEach(b => { b.onclick = () => { limpiarErrores(); showStep(b.dataset.volver); }; });
+document.querySelectorAll('[data-texto]').forEach(b => {
+  b.onclick = () => {
+    const abierto = $(b.dataset.texto).classList.toggle('show');
+    b.setAttribute('aria-expanded', String(abierto));
+  };
+});
+$('btn-ver-password').onclick = () => {
+  const ver = $('password').type === 'password';
+  $('password').type = ver ? 'text' : 'password';
+  $('password2').type = ver ? 'text' : 'password';
+  $('btn-ver-password').textContent = ver ? 'Ocultar' : 'Mostrar';
+  $('btn-ver-password').setAttribute('aria-pressed', String(ver));
+};
+$('celular').addEventListener('input', () => { const d = soloDigitos($('celular').value).slice(0, 12); if ($('celular').value !== d) $('celular').value = d; });
+$('conductor_celular').addEventListener('input', () => { const d = soloDigitos($('conductor_celular').value).slice(0, 12); if ($('conductor_celular').value !== d) $('conductor_celular').value = d; });
+// Mientras los enlaces estén en pantalla, avisar antes de salir sin querer
+window.addEventListener('beforeunload', (e) => {
+  if ($('step-telegram').classList.contains('active') && $('vinculos').children.length) { e.preventDefault(); e.returnValue = ''; }
+});
+
+// ── Inicio ───────────────────────────────────────────────────
+agregarPlaca('');
+(async () => {
+  const delEnlace = leerCodigoDeLaUrl();
+  const cfg = await cargarConfig();
+  if (cfg) {
+    if (cfg.funciones && cfg.funciones.inscripcion === false) { showStep('step-nodisponible'); return; }
+    if (cfg.terminos && typeof cfg.terminos.version === 'string') versionTerminos = cfg.terminos.version;
+  }
+  document.querySelectorAll('[data-version]').forEach(e => { e.textContent = versionTerminos; });
+  if (delEnlace) await validarCodigo(delEnlace, true);
+  else { showStep('step-codigo'); $('codigo').focus(); }
+})();
+</script>
+</body>
+</html>

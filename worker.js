@@ -14,8 +14,12 @@ import { generateReport } from './report-pdf.js';
 import {
   hashPassword, verifyPassword,
   generateTotpSecret, verifyTotp, totpUri, qrCodeUrl,
-  createSession, deleteSession, verifyRequest, sha256Hex
+  createSession, deleteSession, verifyRequest, sha256Hex, constantTimeEqual
 } from './auth.js';
+import {
+  funciones, funcionActiva, funcionDeRuta, esProduccion, opcionesPlacas, getEmpresa, destinatarioAlertas, placasDesdeD1, urlBase
+} from './config-empresa.js';
+import { rutasInscripcion } from './inscripcion.js';
 import { handleTelegramUpdate, setupWebhook, checkWebhookHealth, healWebhook, reintentarPendientes, asegurarTablaPendientes } from './telegram.js';
 import {
   generarArchivoDispersion,
@@ -78,24 +82,44 @@ function formatCOP(value) {
   return Math.round(Math.abs(value)).toLocaleString('es-CO');
 }
 
+// Tipos que GET /api/soporte/* muestra en línea; el resto se entrega como descarga
+const TIPOS_SOPORTE_EN_LINEA = new Set([
+  'image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif', 'image/bmp', 'image/tiff',
+  'application/pdf'
+]);
+
+// x-admin-token igual a ADMIN_SETUP_TOKEN, comparado en tiempo constante
+function tokenAdminValido(request, env) {
+  const recibido = request.headers.get('x-admin-token');
+  return !!env.ADMIN_SETUP_TOKEN && typeof recibido === 'string' && constantTimeEqual(recibido, env.ADMIN_SETUP_TOKEN);
+}
+
 // ── Envío de la factura emitida al correo del cliente (formato DIAN, vía Resend; ver factura-email.js) ──
 // f = { invoice_id, numero, url_zip?, url_pdf?, cliente_nombre, cliente_emails[], total?, vence? }
 // modo.auto   → envío automático al emitir (se apaga con ALIADDO_AUTO_EMAIL=false)
 // modo.forzar → reenvía aunque ya figure enviado · modo.prueba → solo a ALERT_EMAIL_TO, sin registrar
 // Una factura se envía UNA vez (tabla facturas_email). Nunca lanza: devuelve {ok, ...} o null si no aplica.
 async function enviarEmailFactura(env, f, modo = {}) {
+  if (!funcionActiva(env, 'correo_terceros')) return null;   // instancia sin correos a terceros (FEATURES_OFF)
   if (!f || !f.invoice_id) return null;
   if (modo.auto && String(env.ALIADDO_AUTO_EMAIL || '').toLowerCase() === 'false') return null;
   // Al cliente solo se le envía una factura que la DIAN validó
   if (!modo.prueba && !/^valida$/i.test(String(f.state_dian || ''))) {
     return { ok: false, error: `La DIAN no ha validado la factura ${f.numero || ''} (estado: ${f.state_dian || 'desconocido'}); no se envía al cliente.` };
   }
-  const duenoEmail = env.ALERT_EMAIL_TO || 'david@davidduque.com';
+  // Los valores fijos (remitente, responder-a, copia y emisor de DOCE DOCENAS) son respaldo SOLO de producción.
+  // Otra instancia envía únicamente con su propia configuración explícita; si falta, no envía.
+  const prod = esProduccion(env);
+  if (!prod && !(env.FACTURAS_EMAIL_FROM && env.EMISOR_NIT && env.EMISOR_NOMBRE)) {
+    return { ok: false, error: 'Esta instancia no tiene configurado el envío de facturas (FACTURAS_EMAIL_FROM, EMISOR_NIT, EMISOR_NOMBRE).' };
+  }
+  const duenoEmail = env.ALERT_EMAIL_TO || (prod ? 'david@davidduque.com' : null);
+  if (modo.prueba && !duenoEmail) return { ok: false, prueba: true, error: 'Falta ALERT_EMAIL_TO para el envío de prueba.' };
   const bccCfg = String(env.FACTURAS_EMAIL_BCC || '').trim();
   const opts = {
     resendKey: env.RESEND_API_KEY,
     from: env.FACTURAS_EMAIL_FROM || `${env.EMISOR_NOMBRE || 'DOCE DOCENAS SAS'} <facturacion@davidduque.com>`,
-    replyTo: env.ALIADDO_REPLY_TO || 'ddropero@gmail.com',
+    replyTo: env.ALIADDO_REPLY_TO || (prod ? 'ddropero@gmail.com' : null),
     bcc: modo.prueba || bccCfg.toLowerCase() === 'none' ? null : (bccCfg || duenoEmail),
     emisorNit: env.EMISOR_NIT || '900768035-9',
     emisorNombre: env.EMISOR_NOMBRE || 'DOCE DOCENAS SAS',
@@ -131,11 +155,44 @@ async function enviarEmailFactura(env, f, modo = {}) {
   }
 }
 
+// ── Página de inicio pública ──────────────────────────────
+// Solo existe fuera de producción y donde este Worker sirve también los HTML (binding ASSETS de [env.piloto.assets];
+// producción no lo tiene). wrangler.toml manda al Worker primero únicamente estas rutas (run_worker_first):
+//   /            → inicio.html (la presentación pública). Si el archivo no está, lo de siempre: index.html
+//   /index.html  → index.html (sin esto el servidor de archivos redirige /index.html a /, que ya es la de inicio)
+// Devuelve null si la ruta no es una de esas: el resto del Worker sigue igual.
+const RUTAS_INDEX = new Set(['/index.html', '/index']);
+async function paginaInicio(request, env, url) {
+  if (esProduccion(env) || !env.ASSETS || typeof env.ASSETS.fetch !== 'function') return null;
+  if (request.method !== 'GET' && request.method !== 'HEAD') return null;
+  const pedir = ruta => {
+    const destino = new URL(url);
+    destino.pathname = ruta;
+    return env.ASSETS.fetch(new Request(destino, request));
+  };
+  try {
+    if (url.pathname === '/') {
+      const r = await pedir('/inicio');
+      if (r.status !== 404) return r;
+      return pedir('/');
+    }
+    if (RUTAS_INDEX.has(url.pathname)) return pedir('/');
+  } catch (err) {
+    console.error('[INICIO] no pude servir la página:', err && err.message);
+  }
+  return null;
+}
+
 // ═══════════════════════════════════════════════════════════
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS_HEADERS });
+
+    if (!url.pathname.startsWith('/api/')) {
+      const inicio = await paginaInicio(request, env, url);
+      if (inicio) return inicio;
+    }
 
     // ── Auth middleware ─────────────────────────────────────
     // Rutas públicas (no requieren auth). Las apps de captura usan
@@ -153,7 +210,23 @@ export default {
       'POST /api/viajes',
       'POST /api/telegram/webhook',
       'GET /api/telegram/health',
+      // Configuración pública e inscripción del piloto (inscripcion.js). Las de inscripción responden 404 sin INSCRIPCION="on"
+      // y la de invitaciones exige además x-admin-token
+      'GET /api/config-publica',
+      'POST /api/inscripcion',
+      'POST /api/inscripcion/validar',
+      'POST /api/admin/invitaciones',
     ]);
+    // Con captura_publica apagada (FEATURES_OFF) la captura web exige sesión; sin la bandera, igual que siempre
+    if (!funcionActiva(env, 'captura_publica')) {
+      for (const r of ['POST /api/upload', 'POST /api/confirm', 'POST /api/manifiesto/upload', 'POST /api/viajes']) PUBLIC_ROUTES.delete(r);
+    }
+    // Una instancia nueva nace sin usuarios: el webhook del bot se registra solo con x-admin-token (se valida en cada ruta).
+    // En producción estas dos rutas siguen exigiendo además sesión, como siempre.
+    if (!esProduccion(env)) {
+      PUBLIC_ROUTES.add('POST /api/telegram/setup');
+      PUBLIC_ROUTES.add('POST /api/telegram/heal');
+    }
     const isPublic = PUBLIC_ROUTES.has(`${request.method} ${url.pathname}`)
       || url.pathname.startsWith('/api/soporte/');
 
@@ -163,12 +236,22 @@ export default {
       if (!authUser) return json({ error: 'Unauthorized' }, 401);
     }
 
+    // ── Inscripción, configuración pública y vinculación de Telegram (inscripcion.js) ──
+    const rInscripcion = await rutasInscripcion(request, env, url, authUser);
+    if (rInscripcion) return rInscripcion;
+
+    // ── Funciones apagadas en esta instancia (FEATURES_OFF): la ruta responde 404 sin ejecutar nada ──
+    const funcionRuta = funcionDeRuta(url.pathname);
+    if (funcionRuta && !funcionActiva(env, funcionRuta)) {
+      return json({ error: 'Función no habilitada en esta instancia', funcion: funcionRuta }, 404);
+    }
+
     // ── POST /api/upload ────────────────────────────────────
     if (request.method === 'POST' && url.pathname === '/api/upload') {
       try {
         const form     = await request.formData();
         const file     = form.get('file');
-        const usuario  = form.get('usuario') || 'david';
+        const usuario  = form.get('usuario') || authUser?.nombre || authUser?.email || 'david';
         const vehiculo = form.get('vehiculo') || null;
         if (!file) return json({ error: 'No file' }, 400);
 
@@ -183,7 +266,7 @@ export default {
         const r2Promise = env.BUCKET.put(r2Key, buf, { httpMetadata: { contentType: mimeType } });
 
         // ★ OCR Router: hybrid (Gemini→Sonnet fallback) | sonnet | gemini
-        const preview = await runOcrAgent(b64, mimeType, env, env.DB);
+        const preview = await runOcrAgent(b64, mimeType, env, env.DB, await opcionesPlacas(env));
 
         await r2Promise;
 
@@ -311,14 +394,15 @@ export default {
           body.es_nota_credito ? 1 : 0,
           body.medio_pago || null, body.referencia_pago || null,
           body.kilometraje || null, body.ruta || null,
-          body.archivo_r2 || null, body.usuario || 'david',
+          body.archivo_r2 || null, body.usuario || authUser?.nombre || authUser?.email || 'david',
           body.estado || 'confirmado', body.notas || null,
           esRecurrenteAuto
         ).first();
         const numero = ins.numero;
 
-        // Notificar por email (un correo por gasto)
-        if (env.RESEND_API_KEY) {
+        // Notificar por email (un correo por gasto). destinatarioAlertas: el de siempre en producción; null si la instancia no envía avisos
+        const paraAvisoGasto = env.RESEND_API_KEY ? await destinatarioAlertas(env) : null;
+        if (paraAvisoGasto) {
           const fmtCOP = v => new Intl.NumberFormat('es-CO', { style:'currency', currency:'COP', maximumFractionDigits:0 }).format(v);
           const vehiculo = body.vehiculo || '—';
           const emailHtml = `
@@ -345,7 +429,7 @@ export default {
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${env.RESEND_API_KEY}` },
             body: JSON.stringify({
               from: env.ALERT_EMAIL_FROM || 'Flota Alertas <alertas@davidduque.com>',
-              to: [env.ALERT_EMAIL_TO || 'david@davidduque.com'],
+              to: [paraAvisoGasto],
               subject: `🚛 ${vehiculo} — ${fmtCOP(body.total)} — ${body.proveedor_nombre || body.concepto || 'Gasto'}`,
               html: emailHtml
             })
@@ -654,14 +738,21 @@ export default {
         const obj = await env.BUCKET.get(key);
         if (!obj) return json({ error: 'Archivo no encontrado', key_tried: key }, 404);
 
-        return new Response(obj.body, {
-          headers: {
-            ...CORS_HEADERS,
-            'Content-Type': obj.httpMetadata?.contentType || 'application/octet-stream',
-            'Content-Disposition': `inline; filename="${key.split('/').pop()}"`,
-            'Cache-Control': 'private, max-age=3600'
-          }
-        });
+        // Solo imágenes de mapa de bits y PDF se muestran en línea. Cualquier otro tipo guardado (SVG, HTML, XML...)
+        // se entrega como descarga binaria: abierto en una pestaña correría en el origen de la API.
+        const tipoGuardado = String(obj.httpMetadata?.contentType || '').split(';')[0].trim().toLowerCase();
+        const enLinea = TIPOS_SOPORTE_EN_LINEA.has(tipoGuardado);
+        const nombreArchivo = key.split('/').pop().replace(/["\r\n]/g, '_');
+        const cabeceras = {
+          ...CORS_HEADERS,
+          'Content-Type': enLinea ? tipoGuardado : 'application/octet-stream',
+          'Content-Disposition': `${enLinea ? 'inline' : 'attachment'}; filename="${nombreArchivo}"`,
+          'X-Content-Type-Options': 'nosniff',
+          'Cache-Control': 'private, max-age=3600'
+        };
+        // El visor de PDF del navegador no abre dentro de un documento con sandbox: al PDF solo se le pone nosniff
+        if (tipoGuardado !== 'application/pdf') cabeceras['Content-Security-Policy'] = 'sandbox';
+        return new Response(obj.body, { headers: cabeceras });
       } catch (err) {
         return json({ error: err.message }, 500);
       }
@@ -676,7 +767,7 @@ export default {
       try {
         const form     = await request.formData();
         const file     = form.get('file');
-        const usuario  = form.get('usuario') || 'andrea';
+        const usuario  = form.get('usuario') || authUser?.nombre || authUser?.email || 'andrea';
         const vehiculo = form.get('vehiculo') || null;
         if (!file) return json({ error: 'No file' }, 400);
 
@@ -690,7 +781,7 @@ export default {
         const r2Key     = `soportes/${Date.now()}-${file.name}`;
         const r2Promise = env.BUCKET.put(r2Key, buf, { httpMetadata: { contentType: mimeType } });
 
-        const preview = await runManifiestoAgent(b64, mimeType, env.GEMINI_API_KEY, env.DB, { anthropicKey: env.ANTHROPIC_API_KEY });
+        const preview = await runManifiestoAgent(b64, mimeType, env.GEMINI_API_KEY, env.DB, { anthropicKey: env.ANTHROPIC_API_KEY, ...(await opcionesPlacas(env)) });
 
         await r2Promise;
 
@@ -751,13 +842,14 @@ export default {
           body.valor_cobrado || 0, body.fecha_cobro || null,
           body.estado_factura || 'pendiente', body.numero_factura || null,
           body.fecha_factura || null,
-          body.archivo_r2 || null, body.usuario || 'andrea',
+          body.archivo_r2 || null, body.usuario || authUser?.nombre || authUser?.email || 'andrea',
           body.estado || 'confirmado', body.notas || null
         ).first();
         const numero = ins.numero;
 
         // Notificar por email (un correo por viaje) — mirror del de gastos, no bloqueante
-        if (env.RESEND_API_KEY) {
+        const paraAvisoViaje = env.RESEND_API_KEY ? await destinatarioAlertas(env) : null;
+        if (paraAvisoViaje) {
           const fmtCOP = v => new Intl.NumberFormat('es-CO', { style:'currency', currency:'COP', maximumFractionDigits:0 }).format(v || 0);
           const vehiculo = body.vehiculo || '—';
           const emailHtml = `
@@ -784,7 +876,7 @@ export default {
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${env.RESEND_API_KEY}` },
             body: JSON.stringify({
               from: env.ALERT_EMAIL_FROM || 'Flota Alertas <alertas@davidduque.com>',
-              to: [env.ALERT_EMAIL_TO || 'david@davidduque.com'],
+              to: [paraAvisoViaje],
               subject: `🚛 Viaje ${vehiculo} — ${fmtCOP(body.valor_flete)} — ${body.empresa_carga || 'Manifiesto'}`,
               html: emailHtml
             })
@@ -1296,14 +1388,16 @@ export default {
           }
         }
         if (!attachments.length) return json({ error: 'No se pudo descargar ningún archivo', faltan }, 502);
+        const paraCopia = env.ALERT_EMAIL_TO || (esProduccion(env) ? 'david@davidduque.com' : null);
+        if (!paraCopia) return json({ error: 'Falta ALERT_EMAIL_TO en esta instancia' }, 400);
         const filas = facturas.map(f => `<li>Factura ${String(f.numero || '').replace(/[<>&]/g, '')}${f.cliente ? ' — ' + String(f.cliente).replace(/[<>&]/g, '') : ''}</li>`).join('');
         const send = await fetch('https://api.resend.com/emails', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${env.RESEND_API_KEY}` },
           body: JSON.stringify({
             from: env.ALERT_EMAIL_FROM || 'Flota Alertas <alertas@davidduque.com>',
-            to: [env.ALERT_EMAIL_TO || 'david@davidduque.com'],
-            subject: `Copia facturas DOCE DOCENAS SAS — ${facturas.map(f => f.numero).join(', ')}`,
+            to: [paraCopia],
+            subject: `Copia facturas ${env.EMISOR_NOMBRE || 'DOCE DOCENAS SAS'} — ${facturas.map(f => f.numero).join(', ')}`,
             html: `<p>Copia de las facturas electrónicas emitidas (ZIP oficial DIAN con XML + PDF, y el PDF aparte):</p><ul>${filas}</ul>`,
             attachments,
           }),
@@ -1840,13 +1934,14 @@ export default {
             .bind(`${mes}%`).all()
         ]);
 
+        const empExport = await getEmpresa(env);   // config_empresa (instancia inscrita) o las variables de siempre
         const result = generarReporteContadora(
           viajesRes.results || [],
           gastosRes.results || [],
           mes,
           {
-            nombre: env.EMISOR_NOMBRE || '(configurar EMISOR_NOMBRE)',
-            nit: env.EMISOR_NIT || '(configurar EMISOR_NIT)'
+            nombre: empExport.nombre || env.EMISOR_NOMBRE || '(configurar EMISOR_NOMBRE)',
+            nit: empExport.nit || env.EMISOR_NIT || '(configurar EMISOR_NIT)'
           }
         );
 
@@ -1902,7 +1997,8 @@ export default {
         for (const k of Object.keys(filas)) { const o = filas[k]; (porVeh[o.vehiculo] = porVeh[o.vehiculo] || []).push(o); }
 
         const lineas = [];
-        lineas.push(`RESUMEN ${anio} - ${env.EMISOR_NOMBRE || 'DOCE DOCENAS SAS'} NIT ${env.EMISOR_NIT || ''}`);
+        const empResumen = await getEmpresa(env);
+        lineas.push(`RESUMEN ${anio} - ${empResumen.nombre || env.EMISOR_NOMBRE || (esProduccion(env) ? 'DOCE DOCENAS SAS' : 'Flota')} NIT ${empResumen.nit || env.EMISOR_NIT || ''}`);
         lineas.push(CAB.map(esc).join(';'));
         const gran = nueva('TODOS', 'TOTAL ' + anio);
         for (const veh of Object.keys(porVeh).sort()) {
@@ -1961,6 +2057,8 @@ export default {
 
     // ── GET /api/recurrentes ─────────────────────────────────
     if (request.method === 'GET' && url.pathname === '/api/recurrentes') {
+      // La lista de recurrentes es propia de la instancia de producción: apagada (FEATURES_OFF) responde vacío
+      if (!funcionActiva(env, 'recurrentes')) return json({ ok: true, recurrentes: [], faltantes: [] });
       try {
         const p    = url.searchParams;
         const mes  = parseInt(p.get('mes'))  || new Date().getMonth() + 1;
@@ -2022,7 +2120,7 @@ export default {
         try {
           // checkRecurrentes para asegurar disponibilidad de la firma; se complementa
           // con las obligaciones registradas en D1 para vencidas/próximas.
-          await checkRecurrentes(env.DB, mesNum, anio);
+          if (funcionActiva(env, 'recurrentes')) await checkRecurrentes(env.DB, mesNum, anio);
           const esMesActual = (mesNum === now.getMonth() + 1 && anio === now.getFullYear());
           const hoyDia = now.getDate();
           const obligs = await env.DB.prepare("SELECT * FROM obligaciones WHERE activo = 1").all();
@@ -2738,9 +2836,10 @@ REGLAS:
         const count = await env.DB.prepare('SELECT COUNT(*) as n FROM users').first();
         const hasUsers = count?.n > 0;
         const adminToken = request.headers.get('x-admin-token');
-        const isAdmin = env.ADMIN_SETUP_TOKEN && adminToken === env.ADMIN_SETUP_TOKEN;
+        const isAdmin = !!env.ADMIN_SETUP_TOKEN && typeof adminToken === 'string' && constantTimeEqual(adminToken, env.ADMIN_SETUP_TOKEN);
 
-        if (hasUsers && !isAdmin) {
+        // Con INSCRIPCION="on" la base nace sin usuarios: el registro abierto queda cerrado (solo con el token de administrador)
+        if ((hasUsers || funciones(env).inscripcion) && !isAdmin) {
           return json({ error: 'Registro deshabilitado. Contacta al administrador.' }, 403);
         }
 
@@ -2761,7 +2860,11 @@ REGLAS:
     // ── POST /api/auth/login ────────────────────────────────
     if (request.method === 'POST' && url.pathname === '/api/auth/login') {
       try {
-        const { email, password } = await request.json();
+        const cuerpoLogin = await request.json();
+        const password = cuerpoLogin.password;
+        const fnLogin = funciones(env);
+        // La inscripción guarda el correo en minúsculas y sin espacios; solo en esas instancias se normaliza al entrar
+        const email = fnLogin.inscripcion && typeof cuerpoLogin.email === 'string' ? cuerpoLogin.email.trim().toLowerCase() : cuerpoLogin.email;
         if (!email || !password) return json({ error: 'Credenciales requeridas' }, 400);
 
         const user = await env.DB.prepare(
@@ -2773,6 +2876,17 @@ REGLAS:
 
         const valid = await verifyPassword(password, user.password_hash);
         if (!valid) return json({ error: 'Credenciales inválidas' }, 401);
+
+        // AUTH_2FA="on": sesión temporal (5 min) que solo sirve para setup-2fa / verify-2fa; la sesión completa sale de verify-2fa
+        if (fnLogin.auth_2fa) {
+          const temp = await createSession(env.DB, user.id, 'temp');
+          return json({
+            ok: true,
+            temp_token: temp.token,
+            needs_setup: !user.totp_verified || !user.totp_secret,
+            expires_at: temp.expires_at
+          });
+        }
 
         // 2FA deshabilitado: crear session full inmediatamente
         const { token, expires_at } = await createSession(env.DB, user.id, 'full');
@@ -2798,18 +2912,26 @@ REGLAS:
         const user = await verifyRequest(request, env, { requireFull: false });
         if (!user) return json({ error: 'Token temporal inválido' }, 401);
         if (user.session_tipo !== 'temp') return json({ error: 'Ya autenticado' }, 400);
+        // Con el login en dos pasos activo, quien solo tiene la contraseña no puede volver a generar el secreto de un usuario
+        // que ya lo configuró (sería saltarse el segundo factor). Restablecerlo es una operación del administrador en D1.
+        if (funciones(env).auth_2fa && user.totp_verified) {
+          return json({ error: 'La verificación en dos pasos ya está configurada. Ingrese el código de su aplicación.' }, 409);
+        }
 
         const secret = generateTotpSecret();
         await env.DB.prepare(
           'UPDATE users SET totp_secret = ?, totp_verified = 0 WHERE id = ?'
         ).bind(secret, user.id).run();
 
-        const uri = totpUri(user.email, secret, 'Flota');
+        // Producción: el emisor de siempre. Otras instancias: el nombre de la empresa inscrita
+        const emisor2fa = esProduccion(env) ? 'Flota' : ((await getEmpresa(env)).nombre || 'Flota');
+        const uri = totpUri(user.email, secret, emisor2fa);
         return json({
           ok: true,
           secret,
           otpauth_uri: uri,
-          qr_url: qrCodeUrl(uri)
+          // Fuera de producción no se manda el secreto a un servicio externo de QR: el navegador lo dibuja con otpauth_uri
+          qr_url: esProduccion(env) ? qrCodeUrl(uri) : null
         });
       } catch (err) {
         return json({ error: err.message }, 500);
@@ -2832,8 +2954,29 @@ REGLAS:
 
         if (!row?.totp_secret) return json({ error: 'TOTP no configurado' }, 400);
 
+        // Con AUTH_2FA="on": máximo 5 códigos fallidos por usuario en 15 minutos (tabla intentos_inscripcion de schema-piloto.sql)
+        const limitar2fa = funciones(env).auth_2fa;
+        const clave2fa = limitar2fa ? await sha256Hex('totp:' + user.id) : null;
+        // El intento se anota ANTES de verificar (una ráfaga simultánea no pasa toda) y se borra al acertar.
+        // Si la tabla no está no se deja pasar: sin límite el segundo factor se podría adivinar por fuerza bruta.
+        if (limitar2fa) {
+          try {
+            await env.DB.prepare("INSERT INTO intentos_inscripcion (ip_hash, ruta) VALUES (?, 'totp')").bind(clave2fa).run();
+            const intentos = await env.DB.prepare(
+              "SELECT COUNT(*) AS n FROM intentos_inscripcion WHERE ip_hash = ? AND creado_en > datetime('now','-15 minutes')"
+            ).bind(clave2fa).first();
+            if (intentos && intentos.n > 5) return json({ error: 'Demasiados códigos incorrectos. Espere 15 minutos.', retry_after_s: 900 }, 429);
+          } catch (err) {
+            console.error('[AUTH] no pude aplicar el límite de códigos:', err && err.message);
+            return json({ error: 'La verificación en dos pasos no está disponible en este momento. ¿Se aplicó schema-piloto.sql?' }, 503);
+          }
+        }
+
         const valid = await verifyTotp(row.totp_secret, code);
         if (!valid) return json({ error: 'Código inválido' }, 401);
+        if (limitar2fa) {
+          try { await env.DB.prepare('DELETE FROM intentos_inscripcion WHERE ip_hash = ?').bind(clave2fa).run(); } catch {}
+        }
 
         if (user.totp_verified === 0) {
           await env.DB.prepare('UPDATE users SET totp_verified = 1 WHERE id = ?').bind(user.id).run();
@@ -2871,13 +3014,16 @@ REGLAS:
 
     // ── GET /api/auth/me ────────────────────────────────────
     if (request.method === 'GET' && url.pathname === '/api/auth/me') {
+      const empMe = await getEmpresa(env);
       return json({
         ok: true,
         user: {
           email: authUser.email,
           nombre: authUser.nombre,
           rol: authUser.rol
-        }
+        },
+        empresa: { nombre: empMe.nombre || null, nit: empMe.nit || null },
+        funciones: funciones(env)
       });
     }
 
@@ -2907,6 +3053,10 @@ REGLAS:
         const body = await request.json();
         const chatId = (body.telegram_chat_id === '' || body.telegram_chat_id === undefined)
           ? null : body.telegram_chat_id;
+        // Pegar un chat_id a mano se saltaría la autorización de datos del conductor (/acepto)
+        if (chatId !== null && placasDesdeD1(env)) {
+          return json({ error: 'En esta instancia los chats se vinculan con el enlace de Telegram (Vehículos → Generar enlace), no pegando el chat_id.' }, 400);
+        }
 
         const row = await env.DB.prepare('SELECT placa FROM vehiculos WHERE placa = ?').bind(placa).first();
         if (!row) return json({ error: 'Vehículo no encontrado' }, 404);
@@ -2928,6 +3078,8 @@ REGLAS:
       try {
         const expected = env.TELEGRAM_WEBHOOK_SECRET;
         const got = request.headers.get('X-Telegram-Bot-Api-Secret-Token');
+        // Fuera de producción el webhook no funciona sin secreto (permitiría falsificar un /start o fotos)
+        if (!expected && !esProduccion(env)) return json({ error: 'Webhook sin secreto' }, 503);
         if (expected && got !== expected) {
           return json({ error: 'Invalid secret' }, 403);
         }
@@ -2944,14 +3096,16 @@ REGLAS:
     // POST /api/telegram/setup — configura el webhook (admin only)
     if (request.method === 'POST' && url.pathname === '/api/telegram/setup') {
       try {
-        const adminToken = request.headers.get('x-admin-token');
-        if (!env.ADMIN_SETUP_TOKEN || adminToken !== env.ADMIN_SETUP_TOKEN) {
+        if (!tokenAdminValido(request, env)) {
           return json({ error: 'Forbidden' }, 403);
         }
         if (!env.TELEGRAM_BOT_TOKEN) {
           return json({ error: 'TELEGRAM_BOT_TOKEN not configured' }, 400);
         }
-        const webhookUrl = `https://${url.host}/api/telegram/webhook`;
+        // Producción: el host por el que llegó la petición, como siempre. Otras instancias: la URL pública configurada
+        // (WORKER_URL, p. ej. el dominio propio), para que el webhook no quede apuntando a otro host del mismo Worker
+        const basePublica = esProduccion(env) ? null : urlBase(env, null);
+        const webhookUrl = `${basePublica || 'https://' + url.host}/api/telegram/webhook`;
         const secret = env.TELEGRAM_WEBHOOK_SECRET || crypto.randomUUID();
         const result = await setupWebhook(env, webhookUrl, secret);
         return json({
@@ -2978,8 +3132,7 @@ REGLAS:
     // POST /api/telegram/heal — fuerza re-registro del webhook (admin only)
     if (request.method === 'POST' && url.pathname === '/api/telegram/heal') {
       try {
-        const adminToken = request.headers.get('x-admin-token');
-        if (!env.ADMIN_SETUP_TOKEN || adminToken !== env.ADMIN_SETUP_TOKEN) {
+        if (!tokenAdminValido(request, env)) {
           return json({ error: 'Forbidden' }, 403);
         }
         const result = await healWebhook(env);
@@ -3002,7 +3155,10 @@ REGLAS:
         }
         const me = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/getMe`).then(r => r.json());
         const wh = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/getWebhookInfo`).then(r => r.json());
+        let chatsD1 = 0;   // chats vinculados por /start (tabla telegram_chats; puede no existir)
+        try { chatsD1 = (await env.DB.prepare('SELECT COUNT(*) AS n FROM telegram_chats WHERE activo = 1').first())?.n || 0; } catch {}
         return json({
+          chats_d1: chatsD1,
           bot: me.result,
           webhook: wh.result,
           authorized_chats: env.TELEGRAM_AUTHORIZED_CHATS ? env.TELEGRAM_AUTHORIZED_CHATS.split(',').length : 0
@@ -3529,6 +3685,12 @@ REGLAS:
       console.error('[CRON] Reintento de pendientes failed:', err.message);
     }
 
+    // ── 0c. Limpieza del piloto: códigos de vinculación vencidos sin usar e intentos viejos (las tablas pueden no existir) ──
+    try {
+      await env.DB.prepare("DELETE FROM telegram_vinculos WHERE usado_en IS NULL AND expira_en < datetime('now')").run();
+      await env.DB.prepare("DELETE FROM intentos_inscripcion WHERE creado_en < datetime('now','-2 days')").run();
+    } catch { /* sin las tablas de schema-piloto.sql */ }
+
     // 1. Obtener obligaciones pendientes
     let vencidas = [];
     let proximas = [];
@@ -3648,6 +3810,8 @@ REGLAS:
     // 5. Enviar por Resend
     const resendKey = env.RESEND_API_KEY;
     if (!resendKey) return;
+    const paraAlerta = await destinatarioAlertas(env);   // producción: el de siempre; null si la instancia no envía avisos
+    if (!paraAlerta) return;
 
     let subject;
     if (telegramAlert?.had_issue && !telegramAlert.recovered) {
@@ -3670,7 +3834,7 @@ REGLAS:
       },
       body: JSON.stringify({
         from: env.ALERT_EMAIL_FROM || 'Flota Alertas <alertas@davidduque.com>',
-        to: [env.ALERT_EMAIL_TO || 'david@davidduque.com'],
+        to: [paraAlerta],
         subject,
         html
       })

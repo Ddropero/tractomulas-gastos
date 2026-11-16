@@ -161,12 +161,15 @@
     font-size: 10px;
     color: var(--muted);
   }
+  .footer-note a { color: var(--accent); text-decoration: none; }
+  .footer-note a:hover { text-decoration: underline; }
+  a.btn { display: block; text-align: center; text-decoration: none; }
 </style>
 </head>
 <body>
   <div class="login-box">
     <div class="logo">Flota <span>dashboard</span></div>
-    <div class="subtitle">STT 115 · STT 121 · UPO 707</div>
+    <div class="subtitle" id="subtitle">STT 115 · STT 121 · UPO 707</div>
 
     <div class="error" id="error"></div>
 
@@ -174,14 +177,15 @@
     <div class="step active" id="step-login">
       <div class="form-group">
         <label>Email</label>
-        <input type="email" id="email" autocomplete="username" placeholder="david@davidduque.com">
+        <input type="email" id="email" autocomplete="username" placeholder="correo@empresa.com">
       </div>
       <div class="form-group">
         <label>Contraseña</label>
         <input type="password" id="password" autocomplete="current-password">
       </div>
       <button class="btn" id="btn-login" onclick="doLogin()">Continuar</button>
-      <div class="footer-note">Los conductores usan tractomulas.davidduque.com sin login</div>
+      <div class="footer-note" id="nota-conductores">Los conductores usan tractomulas.davidduque.com sin login</div>
+      <div class="footer-note" id="nota-inscripcion" style="display:none"><a href="/inscripcion.html">¿Tiene una invitación? Inscríbase</a> · <a href="/inicio.html">Cómo funciona</a></div>
     </div>
 
     <!-- Step 2a: setup 2FA (primera vez) -->
@@ -191,12 +195,13 @@
         Escanea este código QR con <strong style="color:var(--accent)">Google Authenticator</strong>
         (o cualquier app compatible como Authy, 1Password).
       </p>
-      <div class="qr-box">
+      <div class="qr-box" id="qr-box">
         <img id="qr-img" alt="QR Code">
       </div>
       <div class="secret-text">
         O ingresa manualmente: <strong id="secret-text"></strong>
       </div>
+      <a class="btn btn-ghost" id="btn-otpauth" style="display:none;margin:0 0 14px">Abrir en mi app de autenticación</a>
       <div class="form-group">
         <label>Código de 6 dígitos</label>
         <input type="text" id="setup-code" class="code-input" maxlength="6" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code">
@@ -218,8 +223,231 @@
   </div>
 
 <script>
-const WORKER_URL = 'https://tractomulas-gastos.ddropero.workers.dev';
+// Producción se sirve desde Pages y dominios propios: usa la URL fija de su API.
+const API_PRODUCCION = 'https://tractomulas-gastos.ddropero.workers.dev';
+// Lista cerrada de hosts de producción (Pages y dominios propios de la instancia de producción).
+// Cualquier otro host habla SOLO con su propio origen: una instancia nueva nunca envía datos a la API de producción.
+// Un dominio nuevo de producción hay que agregarlo aquí.
+const HOSTS_PRODUCCION = ['flota.davidduque.com', 'tractomulas.davidduque.com'];
+const WORKER_URL = (location.protocol === 'file:' || HOSTS_PRODUCCION.includes(location.hostname) || location.hostname.endsWith('.pages.dev'))
+  ? API_PRODUCCION : location.origin;
+const ES_HOST_PRODUCCION = WORKER_URL === API_PRODUCCION;
 let tempToken = null;
+
+function tokenHeader() {
+  let t = null;
+  try { t = localStorage.getItem('session_token'); } catch {}
+  return t ? { 'Authorization': `Bearer ${t}` } : {};
+}
+
+async function cargarConfig() {
+  try {
+    // Con tope de espera: una petición colgada no puede dejar la página sin arrancar
+    const tope = (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) ? AbortSignal.timeout(6000) : undefined;
+    const r = await fetch(`${WORKER_URL}/api/config-publica`, { headers: tokenHeader(), signal: tope });
+    if (r.ok) return await r.json();
+  } catch {}
+  return null; // sin respuesta: se conserva lo que hoy está fijo
+}
+
+// Los textos fijos del HTML son el respaldo de la instancia de producción.
+// En otra instancia no se muestran: todo sale de la configuración.
+if (!ES_HOST_PRODUCCION) {
+  document.getElementById('subtitle').textContent = '';
+  document.getElementById('nota-conductores').style.display = 'none';
+}
+
+(async () => {
+  const cfg = await cargarConfig();
+  if (!cfg) return;
+  const sub = document.getElementById('subtitle');
+  const vehiculos = Array.isArray(cfg.vehiculos) ? cfg.vehiculos : [];
+  if (vehiculos.length) sub.textContent = vehiculos.map(v => v.nombre || v.placa).join(' · ');
+  else if (cfg.empresa && cfg.empresa.nombre) sub.textContent = cfg.empresa.nombre;
+  const f = cfg.funciones || {};
+  document.getElementById('nota-conductores').style.display =
+    (f.captura_publica !== false && cfg.entorno === 'production') ? '' : 'none';
+  if (f.inscripcion) document.getElementById('nota-inscripcion').style.display = '';
+})();
+
+// ── QR local (sin librerías ni servicios externos) ───────────
+// Modo byte, corrección de errores L, versiones 1 a 10 (hasta 271 bytes).
+// Devuelve una matriz de booleanos, o null si el texto no cabe.
+function qrMatriz(texto) {
+  const datos = Array.from(new TextEncoder().encode(texto));
+  // Por versión: [codewords EC por bloque, bloques grupo 1, datos por bloque g1, bloques grupo 2, datos por bloque g2]
+  const TABLA = [null, [7,1,19,0,0], [10,1,34,0,0], [15,1,55,0,0], [20,1,80,0,0], [26,1,108,0,0],
+    [18,2,68,0,0], [20,2,78,0,0], [24,2,97,0,0], [30,2,116,0,0], [18,2,68,2,69]];
+  const ALINEA = [null, [], [6,18], [6,22], [6,26], [6,30], [6,34], [6,22,38], [6,24,42], [6,26,46], [6,28,50]];
+  let ver = 0, capacidad = 0;
+  for (let v = 1; v <= 10; v++) {
+    const t = TABLA[v];
+    capacidad = t[1] * t[2] + t[3] * t[4];
+    const cabecera = 4 + (v < 10 ? 8 : 16);
+    if (datos.length * 8 + cabecera <= capacidad * 8) { ver = v; break; }
+  }
+  if (!ver) return null;
+  const [ecLen, b1, d1, b2, d2] = TABLA[ver];
+
+  // Flujo de bits: modo byte, longitud, datos, terminador y relleno
+  const bits = [];
+  const poner = (valor, n) => { for (let i = n - 1; i >= 0; i--) bits.push((valor >>> i) & 1); };
+  poner(4, 4);
+  poner(datos.length, ver < 10 ? 8 : 16);
+  datos.forEach(b => poner(b, 8));
+  poner(0, Math.min(4, capacidad * 8 - bits.length));
+  while (bits.length % 8) bits.push(0);
+  const cw = [];
+  for (let i = 0; i < bits.length; i += 8) cw.push(parseInt(bits.slice(i, i + 8).join(''), 2));
+  for (let pad = 0xEC; cw.length < capacidad; pad ^= 0xEC ^ 0x11) cw.push(pad);
+
+  // Reed-Solomon sobre GF(256), polinomio 0x11D
+  const EXP = new Array(512), LOG = new Array(256);
+  for (let i = 0, x = 1; i < 255; i++) { EXP[i] = x; LOG[x] = i; x <<= 1; if (x & 0x100) x ^= 0x11D; }
+  for (let i = 255; i < 512; i++) EXP[i] = EXP[i - 255];
+  const mul = (a, b) => (a && b) ? EXP[LOG[a] + LOG[b]] : 0;
+  let gen = [1];
+  for (let i = 0; i < ecLen; i++) {
+    const sig = new Array(gen.length + 1).fill(0);
+    for (let j = 0; j < gen.length; j++) { sig[j] ^= gen[j]; sig[j + 1] ^= mul(gen[j], EXP[i]); }
+    gen = sig;
+  }
+  const rs = (bloque) => {
+    const res = new Array(ecLen).fill(0);
+    for (const b of bloque) {
+      const f = b ^ res.shift();
+      res.push(0);
+      for (let j = 0; j < ecLen; j++) res[j] ^= mul(gen[j + 1], f);
+    }
+    return res;
+  };
+  const bloques = [], ecs = [];
+  for (let i = 0, pos = 0; i < b1 + b2; i++) {
+    const n = i < b1 ? d1 : d2;
+    const bloque = cw.slice(pos, pos + n); pos += n;
+    bloques.push(bloque); ecs.push(rs(bloque));
+  }
+  const final = [];
+  for (let i = 0; i < Math.max(d1, d2); i++) bloques.forEach(b => { if (i < b.length) final.push(b[i]); });
+  for (let i = 0; i < ecLen; i++) ecs.forEach(e => final.push(e[i]));
+
+  // Matriz y patrones de función
+  const n = ver * 4 + 17;
+  const m = Array.from({ length: n }, () => new Array(n).fill(false));
+  const fn = Array.from({ length: n }, () => new Array(n).fill(false));
+  const fijar = (x, y, oscuro) => { m[y][x] = oscuro; fn[y][x] = true; };
+  for (let i = 0; i < n; i++) { fijar(6, i, i % 2 === 0); fijar(i, 6, i % 2 === 0); }
+  const buscador = (cx, cy) => {
+    for (let dy = -4; dy <= 4; dy++) for (let dx = -4; dx <= 4; dx++) {
+      const x = cx + dx, y = cy + dy, d = Math.max(Math.abs(dx), Math.abs(dy));
+      if (x >= 0 && x < n && y >= 0 && y < n) fijar(x, y, d !== 2 && d !== 4);
+    }
+  };
+  buscador(3, 3); buscador(n - 4, 3); buscador(3, n - 4);
+  const al = ALINEA[ver];
+  for (let i = 0; i < al.length; i++) for (let j = 0; j < al.length; j++) {
+    if ((i === 0 && j === 0) || (i === 0 && j === al.length - 1) || (i === al.length - 1 && j === 0)) continue;
+    for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
+      fijar(al[i] + dx, al[j] + dy, Math.max(Math.abs(dx), Math.abs(dy)) !== 1);
+    }
+  }
+  const formato = (mascara) => {
+    const d = (1 << 3) | mascara; // nivel L = 01
+    let rem = d;
+    for (let i = 0; i < 10; i++) rem = (rem << 1) ^ ((rem >>> 9) * 0x537);
+    const b = ((d << 10) | rem) ^ 0x5412;
+    const bit = (i) => ((b >>> i) & 1) !== 0;
+    for (let i = 0; i <= 5; i++) fijar(8, i, bit(i));
+    fijar(8, 7, bit(6)); fijar(8, 8, bit(7)); fijar(7, 8, bit(8));
+    for (let i = 9; i < 15; i++) fijar(14 - i, 8, bit(i));
+    for (let i = 0; i < 8; i++) fijar(n - 1 - i, 8, bit(i));
+    for (let i = 8; i < 15; i++) fijar(8, n - 15 + i, bit(i));
+    fijar(8, n - 8, true);
+  };
+  formato(0);
+  if (ver >= 7) {
+    let rem = ver;
+    for (let i = 0; i < 12; i++) rem = (rem << 1) ^ ((rem >>> 11) * 0x1F25);
+    const b = (ver << 12) | rem;
+    for (let i = 0; i < 18; i++) {
+      const oscuro = ((b >>> i) & 1) !== 0, a = n - 11 + (i % 3), c = Math.floor(i / 3);
+      fijar(a, c, oscuro); fijar(c, a, oscuro);
+    }
+  }
+
+  // Colocación de datos en zigzag
+  let k = 0;
+  for (let der = n - 1; der >= 1; der -= 2) {
+    if (der === 6) der = 5;
+    for (let v = 0; v < n; v++) for (let j = 0; j < 2; j++) {
+      const x = der - j, sube = ((der + 1) & 2) === 0, y = sube ? n - 1 - v : v;
+      if (!fn[y][x] && k < final.length * 8) { m[y][x] = ((final[k >>> 3] >>> (7 - (k & 7))) & 1) !== 0; k++; }
+    }
+  }
+
+  // Máscara: se prueba cada una y se queda la de menor penalización
+  const MASCARAS = [
+    (x, y) => (x + y) % 2 === 0, (x, y) => y % 2 === 0, (x, y) => x % 3 === 0, (x, y) => (x + y) % 3 === 0,
+    (x, y) => (Math.floor(x / 3) + Math.floor(y / 2)) % 2 === 0, (x, y) => (x * y) % 2 + (x * y) % 3 === 0,
+    (x, y) => ((x * y) % 2 + (x * y) % 3) % 2 === 0, (x, y) => ((x + y) % 2 + (x * y) % 3) % 2 === 0];
+  const aplicar = (i) => { for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) if (!fn[y][x] && MASCARAS[i](x, y)) m[y][x] = !m[y][x]; };
+  const penal = () => {
+    let p = 0, oscuros = 0;
+    const linea = (get) => {
+      let racha = 1;
+      for (let i = 1; i < n; i++) {
+        if (get(i) === get(i - 1)) { racha++; if (racha === 5) p += 3; else if (racha > 5) p++; } else racha = 1;
+      }
+      for (let i = 0; i + 10 < n; i++) {
+        const s = [0,1,2,3,4,5,6,7,8,9,10].map(d => get(i + d) ? 1 : 0).join('');
+        if (s === '10111010000' || s === '00001011101') p += 40;
+      }
+    };
+    for (let i = 0; i < n; i++) { linea(j => m[i][j]); linea(j => m[j][i]); }
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+      if (m[y][x]) oscuros++;
+      if (x + 1 < n && y + 1 < n && m[y][x] === m[y][x + 1] && m[y][x] === m[y + 1][x] && m[y][x] === m[y + 1][x + 1]) p += 3;
+    }
+    return p + Math.floor(Math.abs(oscuros * 20 - n * n * 10) / (n * n)) * 10;
+  };
+  let mejor = 0, minimo = Infinity;
+  for (let i = 0; i < 8; i++) {
+    aplicar(i); formato(i);
+    const p = penal();
+    if (p < minimo) { minimo = p; mejor = i; }
+    aplicar(i);
+  }
+  aplicar(mejor); formato(mejor);
+  return m;
+}
+
+// Dibuja el QR como SVG dentro de un elemento. Devuelve false si no se pudo.
+function dibujarQR(el, texto) {
+  const m = qrMatriz(texto);
+  if (!m) return false;
+  const n = m.length, borde = 4;
+  let d = '';
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) if (m[y][x]) d += `M${x + borde},${y + borde}h1v1h-1z`;
+  const t = n + borde * 2;
+  el.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${t} ${t}" role="img" aria-label="Código QR" shape-rendering="crispEdges" style="width:100%;max-width:220px;height:auto;display:block;margin:0 auto"><rect width="${t}" height="${t}" fill="#fff"/><path d="${d}" fill="#000"/></svg>`;
+  return true;
+}
+
+// Paso de configuración del 2FA: con qr_url (producción) se usa la imagen de
+// siempre; sin ella el QR se dibuja en el navegador a partir de otpauth_uri.
+function mostrarSetup2FA(setupData) {
+  const box = document.getElementById('qr-box');
+  const abrir = document.getElementById('btn-otpauth');
+  const uri = String(setupData.otpauth_uri || '');
+  if (setupData.qr_url) {
+    document.getElementById('qr-img').src = setupData.qr_url;
+  } else {
+    const dibujado = /^otpauth:\/\//.test(uri) && dibujarQR(box, uri);
+    if (!dibujado) box.style.display = 'none';
+    if (/^otpauth:\/\//.test(uri)) { abrir.href = uri; abrir.style.display = 'block'; }
+  }
+  document.getElementById('secret-text').textContent = setupData.secret || '';
+}
 
 (async () => {
   const existing = localStorage.getItem('session_token');
@@ -279,8 +507,7 @@ async function doLogin() {
       });
       const setupData = await setupRes.json();
       if (!setupRes.ok) { showError(setupData.error || 'Error configurando 2FA'); return; }
-      document.getElementById('qr-img').src = setupData.qr_url;
-      document.getElementById('secret-text').textContent = setupData.secret;
+      mostrarSetup2FA(setupData);
       showStep('step-setup');
     } else {
       showStep('step-2fa');

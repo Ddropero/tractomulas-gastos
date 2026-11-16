@@ -28,3 +28,96 @@ crons = ["0 12 * * *"]
 
 [dev]
 port = 8788
+
+# ============================================================
+# PILOTO — instancia separada (otra base, otro bucket, otro bot)
+# Mismo código; lo nuevo se enciende SOLO con las variables de este bloque.
+# Los valores REEMPLAZAR_... se llenan en la máquina del dueño (no subir ese cambio:
+# el repositorio es público). No escribir aquí datos del cliente del piloto: van a D1
+# por la inscripción. Vars, D1, R2, assets y triggers no se heredan: por eso se repite todo.
+# Desplegar SIEMPRE con --env piloto (sin --env se despliega producción).
+# Secretos del piloto (wrangler secret put ... --env piloto): TELEGRAM_BOT_TOKEN,
+# TELEGRAM_WEBHOOK_SECRET, ADMIN_SETUP_TOKEN, GEMINI_API_KEY, ANTHROPIC_API_KEY.
+# NO poner en el piloto: RESEND_API_KEY, ALIADDO_API_KEY, ALIADDO_BRANCH_ID, FACTURAS_EMAIL_FROM.
+# Deliberadamente sin definir: ALERT_EMAIL_TO, ALERT_EMAIL_FROM, EMISOR_NOMBRE, EMISOR_NIT,
+# FACTURAS_EMAIL_BCC, TELEGRAM_AUTHORIZED_CHATS.
+#
+# Funciones: fuera de producción TODO está apagado salvo lo que se nombre en FEATURES_ON
+# (facturacion, correo_terceros, pagos_finandina, correo_alertas, recurrentes, pdf_fiscal,
+# captura_publica). FEATURES_OFF se conserva como segunda llave; un nombre mal escrito no enciende nada.
+#
+# PASOS PARA MONTAR EL PILOTO (en este orden):
+#  1. Crear la base D1 "flota-piloto" y el bucket R2 "flota-piloto-soportes"; llenar los REEMPLAZAR_ de abajo.
+#  2. Esquema: npm run db:piloto  (aplica SOLO schema-base-piloto.sql y schema-piloto.sql).
+#     NO aplicar schema.sql / schema-viajes.sql / schema-auth.sql en esta base: schema.sql siembra las
+#     placas de producción y le faltan columnas y tablas. Si se hizo, la inscripción se niega (base nueva).
+#  3. Bot nuevo en BotFather. Si se van a usar grupos: /setprivacy -> Disable para ese bot
+#     (o hacerlo administrador del grupo); si no, el bot no recibe las fotos de los grupos, solo los comandos.
+#  4. Secretos (lista de arriba) y despliegue: npm run deploy:piloto
+#     (npm run deploy despliega PRODUCCIÓN; wrangler deploy sin --env también).
+#  5. Crear la invitación: POST /api/admin/invitaciones con x-admin-token. Esa llamada registra el webhook
+#     del bot y dice en "webhook" si quedó bien; si no, POST /api/telegram/heal con x-admin-token
+#     (fuera de producción setup y heal no piden sesión, solo el token).
+#  6. Enviar al invitado el enlace que devuelve el paso 5.
+#
+# El piloto se sirve SOLO desde su propio origen (workers.dev o un dominio propio apuntado a este Worker):
+# los HTML hablan con el origen que los sirve, salvo la lista HOSTS_PRODUCCION que traen escrita.
+# No publicar dashboard-deploy del piloto en el proyecto de Pages de producción.
+#
+# DOMINIO PROPIO (opcional; sin él el piloto vive en flota-piloto.<subdominio>.workers.dev). 3 pasos:
+#  1. El dominio debe estar activo como zona en ESTA cuenta de Cloudflare. Elegir el nombre (p. ej. un subdominio
+#     solo para esto) y verificar que no tenga ya un registro DNS. No puede ser ninguno de los hosts de
+#     HOSTS_PRODUCCION de los HTML ni un *.pages.dev: esos hablan con la API de producción.
+#  2. Quitar el "#" de la línea "routes" de abajo y de las dos líneas WORKER_URL / FRONTEND_URL del dominio
+#     (y borrar o comentar las dos de workers.dev), cambiando REEMPLAZAR_DOMINIO por el nombre, sin https:// ni "/".
+#  3. npm run deploy:piloto (Cloudflare crea solo el registro DNS y el certificado) y luego
+#     POST https://<dominio>/api/telegram/heal con x-admin-token: vuelve a registrar el webhook del bot con el
+#     dominio y el menú de comandos. Comprobar con GET /api/telegram/health.
+# WORKER_URL es la URL pública de la instancia: con ella se arman el enlace de invitación, el enlace al tablero
+# que da el bot y el webhook de Telegram (el cron diario lo vuelve a apuntar ahí si cambia). Mientras tenga un
+# REEMPLAZAR_ sin llenar se ignora y los enlaces salen con el host por el que llegó la petición.
+# Los enlaces viejos de workers.dev siguen sirviendo mientras workers_dev = true; la sesión es por dominio
+# (quien entró por workers.dev vuelve a iniciar sesión en el dominio nuevo).
+# ============================================================
+[env.piloto]
+name = "flota-piloto"
+workers_dev = true
+routes = [{ pattern = "mulas.davidduque.com", custom_domain = true }]
+
+[env.piloto.vars]
+ENVIRONMENT = "piloto"
+# WORKER_URL = "https://flota-piloto.REEMPLAZAR_SUBDOMINIO.workers.dev"
+# FRONTEND_URL = "https://flota-piloto.REEMPLAZAR_SUBDOMINIO.workers.dev"
+WORKER_URL = "https://mulas.davidduque.com"
+FRONTEND_URL = "https://mulas.davidduque.com"
+# A quién le escribe el dueño si tiene dudas (lo dice el bot en /ayuda). Opcional; no subir el valor real.
+# CONTACTO_SOPORTE = "REEMPLAZAR_CONTACTO"
+OCR_PROVIDER = "hybrid"
+TELEGRAM_BOT_USERNAME = "REEMPLAZAR_USUARIO_DEL_BOT"
+INSCRIPCION = "on"
+AUTH_2FA = "on"
+PLACAS_FUENTE = "d1"
+FEATURES_OFF = "facturacion,correo_terceros,pagos_finandina,correo_alertas,recurrentes,pdf_fiscal,captura_publica"
+TERMINOS_VERSION = "piloto-v1"
+
+[[env.piloto.d1_databases]]
+binding = "DB"
+database_name = "flota-piloto"
+database_id = "REEMPLAZAR_ID_D1_PILOTO"
+
+[[env.piloto.r2_buckets]]
+binding = "BUCKET"
+bucket_name = "flota-piloto-soportes"
+
+# El mismo Worker sirve los HTML del piloto (un solo origen); /api/* llega al Worker porque no hay archivo con ese nombre.
+# Los archivos se sirven primero, SALVO las rutas de run_worker_first: ahí el Worker decide (paginaInicio en worker.js):
+#   /            → inicio.html (presentación pública); si falta el archivo, index.html como antes
+#   /index.html  → index.html (el servidor de archivos lo redirigiría a /)
+# El binding ASSETS solo existe en este entorno: producción no tiene [assets] y no cambia.
+[env.piloto.assets]
+directory = "./dashboard-deploy"
+binding = "ASSETS"
+run_worker_first = ["/", "/index.html", "/index"]
+
+[env.piloto.triggers]
+crons = ["0 12 * * *"]

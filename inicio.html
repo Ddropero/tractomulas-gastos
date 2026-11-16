@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<meta name="referrer" content="no-referrer">
+<meta name="description" content="Le decimos qué transportadora le debe y cuánto le deja cada mula. El conductor manda las fotos por Telegram y la aplicación arma las cuentas.">
+<title>Control de su flota · Cómo funciona</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:ital,wght@0,300;0,600;1,300&display=swap" rel="stylesheet">
+<meta name="theme-color" content="#0d0e0f">
+<style>
+  :root {
+    --bg: #0d0e0f;
+    --surface: #141517;
+    --border: #2c2f33;
+    --accent: #a0d0f0;
+    --accent2: #f0d0a0;
+    --green: #b8f0a0;
+    --text: #e8ebee;
+    --muted: #a3acb5;
+    --mono: 'DM Mono', ui-monospace, Menlo, Consolas, monospace;
+    --serif: 'Fraunces', Georgia, serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 16px;
+    line-height: 1.55;
+    padding: 20px 14px 40px;
+  }
+  .pagina { width: 100%; max-width: 560px; margin: 0 auto; }
+  .box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 24px 20px;
+    margin-bottom: 16px;
+  }
+  .logo { font-family: var(--serif); font-size: 30px; font-weight: 300; line-height: 1.2; color: var(--accent); margin-bottom: 10px; overflow-wrap: anywhere; }
+  .gancho { font-family: var(--serif); font-weight: 300; font-size: 21px; line-height: 1.35; margin-bottom: 8px; }
+  .lead { color: var(--muted); margin-bottom: 18px; }
+  h2 { font-family: var(--serif); font-weight: 300; font-size: 23px; line-height: 1.25; margin-bottom: 14px; }
+  h3 { font-family: var(--serif); font-weight: 600; font-size: 18px; line-height: 1.3; margin-bottom: 4px; }
+  p { margin-bottom: 10px; }
+  p:last-child { margin-bottom: 0; }
+  .btn {
+    display: block;
+    width: 100%;
+    min-height: 52px;
+    padding: 14px 12px;
+    background: var(--accent);
+    color: #0d1a2e;
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    font-family: var(--mono);
+    font-size: 16px;
+    font-weight: 500;
+    text-align: center;
+    text-decoration: none;
+    margin-top: 10px;
+    transition: background 0.15s;
+  }
+  .btn:hover { background: #c0e0ff; }
+  .btn-ghost { background: transparent; color: var(--text); border-color: #5b646d; }
+  .btn-ghost:hover { background: transparent; border-color: var(--accent); color: var(--accent); }
+  a:focus-visible, summary:focus-visible { outline: 3px solid var(--accent2); outline-offset: 2px; }
+  [hidden] { display: none !important; }
+
+  .como { list-style: none; }
+  .como li { display: flex; gap: 14px; align-items: flex-start; padding: 14px 0; border-top: 1px solid var(--border); }
+  .como li:first-child { border-top: none; padding-top: 0; }
+  .como li:last-child { padding-bottom: 0; }
+  .dibujo { flex: 0 0 76px; width: 76px; height: 76px; }
+  .dibujo svg { width: 100%; height: 100%; display: block; }
+  .como .num { color: var(--accent2); font-size: 16px; }
+  .como p { color: var(--muted); }
+
+  .necesita { list-style: none; }
+  .necesita li { position: relative; padding: 8px 0 8px 30px; }
+  .necesita li::before { content: ''; position: absolute; left: 4px; top: 15px; width: 12px; height: 7px; border-left: 2px solid var(--green); border-bottom: 2px solid var(--green); transform: rotate(-45deg); }
+  .necesita span { color: var(--muted); display: block; }
+
+  .pasos { list-style: none; counter-reset: paso; }
+  .pasos li { counter-increment: paso; position: relative; padding: 0 0 18px 46px; }
+  .pasos li:last-child { padding-bottom: 0; }
+  .pasos li::before {
+    content: counter(paso);
+    position: absolute; left: 0; top: 0;
+    width: 32px; height: 32px; border-radius: 50%;
+    border: 1px solid var(--accent); color: var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+  }
+  .pasos p { color: var(--muted); }
+
+  details { border: 1px solid var(--border); border-radius: 4px; margin-bottom: 10px; background: var(--bg); }
+  details:last-child { margin-bottom: 0; }
+  summary { cursor: pointer; padding: 14px 12px; min-height: 52px; color: var(--accent); }
+  details .dentro { padding: 0 12px 14px; color: var(--text); }
+
+  footer { color: var(--muted); padding: 8px 6px 0; }
+  footer a { color: var(--accent); }
+  .enlaces { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 6px 20px; }
+  .enlaces a { display: inline-block; padding: 10px 0; }
+
+  @media (min-width: 520px) {
+    .box { padding: 28px 28px; }
+    .logo { font-size: 34px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .btn { transition: none; } }
+</style>
+</head>
+<body>
+<div class="pagina">
+
+  <header class="box">
+    <h1 class="logo" id="nombre-servicio">Control de su flota</h1>
+    <p class="gancho">Le decimos qué transportadora le debe y cuánto le deja cada mula.</p>
+    <p class="lead">Su conductor manda las fotos por Telegram. La aplicación arma las cuentas.</p>
+    <nav aria-label="Entrar o inscribirse">
+      <a class="btn" id="btn-invitacion" href="/inscripcion.html" hidden>Tengo un código de invitación</a>
+      <a class="btn" id="btn-entrar" href="/login.html">Entrar</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="box" aria-labelledby="t-como">
+      <h2 id="t-como">Cómo funciona</h2>
+      <ol class="como">
+        <li>
+          <div class="dibujo" aria-hidden="true">
+            <svg viewBox="0 0 76 76" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="6" y="14" width="30" height="40" rx="2" stroke="#f0d0a0"/>
+              <path d="M12 23h18M12 30h18M12 37h12M12 44h8" stroke="#f0d0a0"/>
+              <rect x="34" y="20" width="28" height="50" rx="5" stroke="#a0d0f0" fill="#141517"/>
+              <circle cx="48" cy="42" r="8" stroke="#a0d0f0"/>
+              <circle cx="48" cy="42" r="2.5" fill="#a0d0f0" stroke="none"/>
+              <path d="M44 63h8" stroke="#a0d0f0"/>
+              <path d="M60 6l10 4-10 4-2 6-3-10z" stroke="#b8f0a0"/>
+            </svg>
+          </div>
+          <div>
+            <h3><span class="num">1.</span> El conductor toma la foto</h3>
+            <p>Le toma foto al manifiesto y a los recibos del viaje. Los manda por Telegram, como mandar una foto a un contacto.</p>
+          </div>
+        </li>
+        <li>
+          <div class="dibujo" aria-hidden="true">
+            <svg viewBox="0 0 76 76" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="4" y="12" width="24" height="32" rx="2" stroke="#f0d0a0"/>
+              <path d="M9 21h14M9 28h14M9 35h8" stroke="#f0d0a0"/>
+              <path d="M32 28h10m-4-5l5 5-5 5" stroke="#b8f0a0"/>
+              <rect x="46" y="8" width="26" height="18" rx="2" stroke="#a0d0f0"/>
+              <path d="M51 14h10M51 20h16" stroke="#a0d0f0"/>
+              <rect x="46" y="32" width="26" height="18" rx="2" stroke="#a0d0f0"/>
+              <path d="M51 38h10M51 44h16" stroke="#a0d0f0"/>
+              <path d="M8 62h36v-9h10l6 9h8v7H8z" stroke="#e8ebee"/>
+              <circle cx="20" cy="69" r="3.5" stroke="#e8ebee" fill="#141517"/>
+              <circle cx="58" cy="69" r="3.5" stroke="#e8ebee" fill="#141517"/>
+            </svg>
+          </div>
+          <div>
+            <h3><span class="num">2.</span> La aplicación lee los datos</h3>
+            <p>Lee cada foto y arma los viajes y los gastos de cada mula. Usted no tiene que digitar nada.</p>
+          </div>
+        </li>
+        <li>
+          <div class="dibujo" aria-hidden="true">
+            <svg viewBox="0 0 76 76" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="6" y="8" width="64" height="60" rx="4" stroke="#a0d0f0"/>
+              <path d="M14 58V44M26 58V30M38 58V38" stroke="#b8f0a0" stroke-width="6" stroke-linecap="butt"/>
+              <path d="M12 60h34" stroke="#a0d0f0"/>
+              <circle cx="56" cy="27" r="9" stroke="#f0d0a0"/>
+              <path d="M56 21v12M59 24.5c-1-1.5-6-1.500-6 1s6 1.500 6 4-5 2.500-6 1" stroke="#f0d0a0" stroke-width="2"/>
+              <path d="M50 48h14M50 56h10" stroke="#a0d0f0"/>
+            </svg>
+          </div>
+          <div>
+            <h3><span class="num">3.</span> Usted ve las cuentas claras</h3>
+            <p>Ve qué transportadora le debe y cuánto le dejó cada mula. Los soportes quedan listos para su contador.</p>
+          </div>
+        </li>
+      </ol>
+    </section>
+
+    <section class="box" aria-labelledby="t-necesita">
+      <h2 id="t-necesita">Qué necesita para empezar</h2>
+      <ul class="necesita">
+        <li>Un celular con Telegram <span>El suyo y el de su conductor. Telegram es gratis.</span></li>
+        <li>Los manifiestos <span>Los de cada viaje, en papel o en PDF.</span></li>
+        <li>Los extractos de la cuenta donde le pagan <span>Con ellos se revisa qué viajes ya le pagaron.</span></li>
+      </ul>
+    </section>
+
+    <section class="box" id="sec-inscripcion" aria-labelledby="t-pasos" hidden>
+      <h2 id="t-pasos">Paso a paso para inscribirse</h2>
+      <ol class="pasos">
+        <li>
+          <h3>Abra el enlace de invitación</h3>
+          <p>Es el enlace que le enviaron. El código ya viene incluido. Si solo tiene el código, péguelo en la primera pantalla.</p>
+        </li>
+        <li>
+          <h3>Llene sus datos y cree su clave</h3>
+          <p>Nombre o empresa, NIT o cédula, correo y celular. Ahí mismo crea la clave: mínimo 10 caracteres, con letras y números.</p>
+        </li>
+        <li>
+          <h3>Escriba la placa y acepte los términos</h3>
+          <p>La placa del cabezote con el que va a probar. Puede poner hasta tres. Después lee y acepta los términos y la autorización de datos.</p>
+        </li>
+        <li>
+          <h3>Active el código de 6 dígitos</h3>
+          <p>Es la verificación en dos pasos: un código de 6 dígitos que cambia cada medio minuto. Se lo pide el tablero, además de la clave. Lo saca de una aplicación gratis en su celular, como Google Authenticator.</p>
+        </li>
+        <li>
+          <h3>Conecte Telegram</h3>
+          <p>Le salen dos enlaces: uno para usted y otro para su conductor. Cada uno abre el suyo en Telegram y toca Iniciar. El conductor responde /acepto para autorizar el uso de sus datos.</p>
+        </li>
+        <li>
+          <h3>Mande la primera foto</h3>
+          <p>Envíe por Telegram la foto de un recibo o de un manifiesto. En unos segundos le responden con lo que se leyó. Ya puede verlo en el tablero.</p>
+        </li>
+      </ol>
+      <a class="btn" id="btn-invitacion-2" href="/inscripcion.html" hidden>Empezar la inscripción</a>
+    </section>
+
+    <section class="box" aria-labelledby="t-preguntas">
+      <h2 id="t-preguntas">Preguntas frecuentes</h2>
+      <details id="faq-costo" hidden>
+        <summary>¿Cuánto cuesta el piloto?</summary>
+        <div class="dentro">
+          <p>Es gratis durante el piloto. Si más adelante el servicio llega a tener costo, se le avisa antes y usted decide si sigue.</p>
+        </div>
+      </details>
+      <details>
+        <summary>¿De quién son los datos?</summary>
+        <div class="dentro">
+          <p>Suyos. Los recibos, manifiestos, viajes y gastos que usted o su conductor suban le pertenecen a usted.</p>
+        </div>
+      </details>
+      <details>
+        <summary>¿Quién puede verlos?</summary>
+        <div class="dentro">
+          <p>Usted, con su correo, su clave y el código de 6 dígitos. El conductor solo manda fotos por Telegram.</p>
+          <p>Quien presta el servicio los usa solo para leer sus documentos y mostrarle sus cuentas. Se guardan con proveedores de nube y de lectura automática. No se venden ni se comparten con otras empresas de transporte.</p>
+        </div>
+      </details>
+      <details>
+        <summary>¿Reemplaza al contador?</summary>
+        <div class="dentro">
+          <p>No. La aplicación organiza su información y hace cálculos de apoyo. Su contador sigue firmando y declarando; aquí encuentra los soportes ordenados.</p>
+          <p>La lectura es automática y puede equivocarse. Revise los valores antes de pagar, facturar o declarar.</p>
+        </div>
+      </details>
+      <details>
+        <summary>¿Qué pasa si el conductor no tiene datos o señal?</summary>
+        <div class="dentro">
+          <p>No pasa nada. Toma la foto con la cámara del celular y la manda por Telegram cuando vuelva a tener señal o wifi. Lo importante es que la foto se vea completa y nítida.</p>
+        </div>
+      </details>
+      <details>
+        <summary>¿Puedo salirme y pedir que borren todo?</summary>
+        <div class="dentro">
+          <p>Sí. Cuando quiera puede retirarse y pedir una copia o el borrado de su información. Lo pide por el canal de contacto que le entregó quien lo invitó.</p>
+        </div>
+      </details>
+    </section>
+  </main>
+
+  <footer>
+    <p><strong>Tratamiento de datos (Ley 1581 de 2012).</strong> Sus datos y los de su conductor se usan solo para prestarle este servicio: crear y proteger su cuenta, leer sus documentos y mostrarle sus gastos y viajes. No se usan para publicidad. Usted puede conocerlos, corregirlos y pedir que se borren por el canal de contacto que le entregó quien lo invitó. La autorización completa se lee y se acepta en la inscripción.</p>
+    <nav class="enlaces" aria-label="Enlaces">
+      <a id="enlace-inscripcion" href="/inscripcion.html" hidden>Inscribirme</a>
+      <a href="/login.html">Entrar al tablero</a>
+    </nav>
+  </footer>
+</div>
+
+<script>
+// Esta página habla SOLO con su propio origen. Donde no haya /api/config-publica (o no responda), queda sin inscripción.
+const WORKER_URL = location.origin;
+
+// Lo que solo tiene sentido cuando hay inscripción por invitación. Nace oculto (atributo hidden) y se muestra
+// únicamente si la instancia dice que la inscripción está abierta.
+const SOLO_INSCRIPCION = ['btn-invitacion', 'btn-invitacion-2', 'sec-inscripcion', 'faq-costo', 'enlace-inscripcion'];
+
+function sinInscripcion() {
+  SOLO_INSCRIPCION.forEach(id => { const el = document.getElementById(id); if (el) el.hidden = true; });
+  const entrar = document.getElementById('btn-entrar');
+  entrar.textContent = 'Entrar';
+  entrar.classList.remove('btn-ghost');
+}
+
+function conInscripcion() {
+  SOLO_INSCRIPCION.forEach(id => { const el = document.getElementById(id); if (el) el.hidden = false; });
+  const entrar = document.getElementById('btn-entrar');
+  entrar.textContent = 'Ya tengo cuenta';
+  entrar.classList.add('btn-ghost');
+}
+
+// Código de invitación que venga en la dirección (#c=... o ?codigo=...). Se quita de la barra
+// y se pasa a la inscripción en el fragmento (#), que no viaja al servidor ni queda en sus registros.
+function codigoDeLaUrl() {
+  let c = '';
+  const h = /(?:^#|&)c=([^&]+)/.exec(location.hash);
+  if (h) c = h[1];
+  if (!c) { try { c = new URLSearchParams(location.search).get('codigo') || ''; } catch {} }
+  try { c = decodeURIComponent(c); } catch {}
+  if (location.hash || location.search) {
+    try { history.replaceState(null, '', location.pathname); } catch {}
+  }
+  c = c.trim();
+  return (c.length >= 6 && c.length <= 100 && !/\s/.test(c)) ? c : '';
+}
+
+async function cargarConfig() {
+  try {
+    // Con tope de espera: una petición colgada no deja la página a medias
+    const tope = (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) ? AbortSignal.timeout(6000) : undefined;
+    const r = await fetch(`${WORKER_URL}/api/config-publica`, { signal: tope });
+    if (r.ok) return await r.json();
+  } catch {}
+  return null;
+}
+
+const codigo = codigoDeLaUrl();
+if (codigo) {
+  ['btn-invitacion', 'btn-invitacion-2', 'enlace-inscripcion'].forEach(id => {
+    document.getElementById(id).href = '/inscripcion.html#c=' + encodeURIComponent(codigo);
+  });
+}
+
+(async () => {
+  const cfg = await cargarConfig();
+  if (!cfg) return; // sin respuesta: queda el texto genérico y sin inscripción
+  const servicio = cfg.servicio && typeof cfg.servicio.nombre === 'string' ? cfg.servicio.nombre.trim() : '';
+  if (servicio && servicio.length <= 60) {
+    // textContent: el nombre nunca se interpreta como HTML
+    document.getElementById('nombre-servicio').textContent = servicio;
+    document.title = servicio + ' · Cómo funciona';
+  }
+  const f = cfg.funciones || {};
+  // inscripcion_abierta es false cuando la instancia ya tiene su empresa inscrita (solo admite una)
+  if (cfg.entorno && cfg.entorno !== 'production' && f.inscripcion === true && cfg.inscripcion_abierta !== false) conInscripcion();
+  else sinInscripcion();
+})();
+</script>
+</body>
+</html>

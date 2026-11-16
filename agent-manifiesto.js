@@ -9,14 +9,23 @@ import { geminiDisponible, gemini429, geminiBien } from './gemini-estado.js';
 
 const VEHICULOS = ['STT115', 'STT121', 'UPO707'];
 
-const PROMPT = `Eres un experto en el MANIFIESTO ELECTRÓNICO DE CARGA colombiano (documento del Ministerio de Transporte que ampara el transporte terrestre de carga por carretera).
+// placas: lista de la flota (por defecto la fija de siempre). Con lista vacía (instancia sin vehículos aún) se pide la placa tal cual.
+// anio: año en curso para la regla de sanidad de la fecha.
+export function construirPrompt(placas = VEHICULOS, anio = 2026) {
+  const campoVehiculo = placas.length
+    ? `placa del vehículo, mapear a ${placas.join(' | ')} o null`
+    : 'placa del vehículo tal como se lee, sin espacios ni guiones (ej. ABC123), o null';
+  const reglaVehiculo = placas.length
+    ? `busca placa ${placas.map(p => p.slice(0, 3) + '-' + p.slice(3)).join('/')} en el documento; si no aparece, null`
+    : 'devuelve la placa del vehículo tal como se lee; si no aparece, null';
+  return `Eres un experto en el MANIFIESTO ELECTRÓNICO DE CARGA colombiano (documento del Ministerio de Transporte que ampara el transporte terrestre de carga por carretera).
 
 Analiza el documento y devuelve EXCLUSIVAMENTE un JSON con este schema EXACTO:
 
 {
   "numero_manifiesto": "número del manifiesto o null",
   "fecha_viaje": "YYYY-MM-DD (usar Fecha Expedición) o null",
-  "vehiculo": "placa del vehículo, mapear a STT115 | STT121 | UPO707 o null",
+  "vehiculo": "${campoVehiculo}",
   "conductor": "nombre del conductor o null",
   "origen": "Origen Viaje o null",
   "destino": "Destino Viaje o null",
@@ -45,11 +54,12 @@ REGLAS:
 - valor_neto = VALOR NETO A PAGAR
 - anticipo = VALOR ANTICIPO
 - saldo_a_cobrar = SALDO A PAGAR / VALOR A PAGAR
-- FECHA: el año en curso es 2026 y las fechas del manifiesto son recientes. Si el año leído es claramente imposible (anterior a 2024 o posterior a 2027, ej. 2016/2020/2076), es un error de OCR: corrígelo a 2026 manteniendo el mes y el día. Devuelve YYYY-MM-DD.
-- VEHÍCULO: busca placa STT-115/STT-121/UPO-707 en el documento; si no aparece, null
+- FECHA: el año en curso es ${anio} y las fechas del manifiesto son recientes. Si el año leído es claramente imposible (anterior a ${anio - 2} o posterior a ${anio + 1}, ej. 2016/2020/2076), es un error de OCR: corrígelo a ${anio} manteniendo el mes y el día. Devuelve YYYY-MM-DD.
+- VEHÍCULO: ${reglaVehiculo}
 - Si la imagen NO es un manifiesto de carga, confianza = "baja"
 - Imagen borrosa o ilegible: confianza = "baja"
 - Responde SOLO JSON puro, sin markdown`;
+}
 
 const CAMPOS_MONTO = ['valor_flete', 'retefuente', 'reteica', 'otras_retenciones', 'valor_neto', 'anticipo', 'saldo_a_cobrar'];
 
@@ -74,10 +84,10 @@ function toNum(v) {
   return parseFloat(s) || 0;
 }
 
-function detectarVehiculo(texto) {
+function detectarVehiculo(texto, placas = VEHICULOS) {
   if (!texto) return null;
   const t = String(texto).toUpperCase().replace(/[\s\-]/g, '');
-  for (const codigo of VEHICULOS) {
+  for (const codigo of placas) {
     if (t.includes(codigo)) return codigo;
   }
   return null;
@@ -110,12 +120,12 @@ function extraerJson(texto) {
 
 // ── Gemini 2.5 Flash ──────────────────────────────────────
 // Devuelve { parsed } o { error, raw } (error sin el prefijo "manifiesto_")
-async function llamarGemini(fileBase64, mimeType, apiKey, { conRespaldo, deadline }) {
+async function llamarGemini(fileBase64, mimeType, apiKey, { conRespaldo, deadline, prompt }) {
   const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
   const body = {
     contents: [{ parts: [
       { inline_data: { mime_type: mimeType, data: fileBase64 } },
-      { text: PROMPT }
+      { text: prompt }
     ]}],
     generationConfig: {
       responseMimeType: 'application/json',
@@ -179,7 +189,7 @@ async function llamarGemini(fileBase64, mimeType, apiKey, { conRespaldo, deadlin
 
 // ── Claude Sonnet 4.6 (respaldo) ──────────────────────────
 // Devuelve { parsed } o { error, raw } (error sin el prefijo "manifiesto_")
-async function llamarClaude(fileBase64, mimeType, anthropicKey, { deadline }) {
+async function llamarClaude(fileBase64, mimeType, anthropicKey, { deadline, prompt }) {
   const isDoc = mimeType === 'application/pdf';
   const reqBody = JSON.stringify({
     model: 'claude-sonnet-4-6',
@@ -189,7 +199,7 @@ async function llamarClaude(fileBase64, mimeType, anthropicKey, { deadline }) {
       content: [
         { type: isDoc ? 'document' : 'image',
           source: { type: 'base64', media_type: mimeType, data: fileBase64 } },
-        { type: 'text', text: PROMPT }
+        { type: 'text', text: prompt }
       ]
     }]
   });
@@ -241,7 +251,7 @@ async function llamarClaude(fileBase64, mimeType, anthropicKey, { deadline }) {
 
 // ── Normalización y sanidad (compartida por Gemini y Claude) ──
 // Devuelve el objeto de siempre + _proveedor, _fallback_motivo, fecha_corregida y advertencias
-function normalizarManifiesto(parsed, { proveedor, fallbackMotivo, hoy }) {
+function normalizarManifiesto(parsed, { proveedor, fallbackMotivo, hoy, placas = VEHICULOS }) {
   const advertencias = [];
   const anioHoy = parseInt(hoy.slice(0, 4), 10);
 
@@ -257,8 +267,8 @@ function normalizarManifiesto(parsed, { proveedor, fallbackMotivo, hoy }) {
   const digitos = crudo.replace(/\D/g, '');
   const numero = digitos.length >= 3 && /[1-9]/.test(digitos) ? crudo : null;
 
-  const vehiculo = detectarVehiculo(parsed.vehiculo) ||
-    detectarVehiculo(`${parsed.numero_manifiesto || ''} ${parsed.origen || ''} ${parsed.destino || ''} ${parsed.conductor || ''}`);
+  const vehiculo = detectarVehiculo(parsed.vehiculo, placas) ||
+    detectarVehiculo(`${parsed.numero_manifiesto || ''} ${parsed.origen || ''} ${parsed.destino || ''} ${parsed.conductor || ''}`, placas);
 
   // Fecha: formato YYYY-MM-DD y fecha real; si el año cae fuera de [año-1, año+1] es error de OCR (2016, 2024...):
   // se reemplaza solo el año por el actual y se marca para revisión
@@ -347,10 +357,13 @@ function normalizarManifiesto(parsed, { proveedor, fallbackMotivo, hoy }) {
 //   deadline     → epoch ms hasta el que hay presupuesto de tiempo; cada fetch se recorta a lo que queda
 //   sinGemini    → ni se intenta Gemini, directo a Claude (el llamador sabe que acaba de fallar con esta misma foto)
 //   hoy          → YYYY-MM-DD para la sanidad del año (por defecto la fecha de ahora en UTC-5)
+//   placas       → flota de la instancia (config-empresa.js); sin esta opción, la lista fija de siempre
 export async function runManifiestoAgent(fileBase64, mimeType, apiKey, db, opts = {}) {
   const { anthropicKey, deadline, hoy, sinGemini } = opts || {};
   const limite = Number.isFinite(deadline) ? deadline : null;
   const fechaHoy = fechaValida(hoy) ? hoy : fechaHoyColombia();
+  const placas = Array.isArray(opts && opts.placas) ? opts.placas : VEHICULOS;
+  const prompt = construirPrompt(placas, parseInt(fechaHoy.slice(0, 4), 10));
 
   let parsed = null;
   let proveedor = null;
@@ -365,7 +378,7 @@ export async function runManifiestoAgent(fileBase64, mimeType, apiKey, db, opts 
   } else if (anthropicKey && !geminiDisponible()) {
     fallos.gemini = 'pausado';
   } else {
-    const g = await llamarGemini(fileBase64, mimeType, apiKey, { conRespaldo: !!anthropicKey, deadline: limite });
+    const g = await llamarGemini(fileBase64, mimeType, apiKey, { conRespaldo: !!anthropicKey, deadline: limite, prompt });
     if (g.parsed) { parsed = g.parsed; proveedor = 'gemini-2.5-flash'; }
     else { fallos.gemini = g.error; raws.gemini = g.raw; }
   }
@@ -373,7 +386,7 @@ export async function runManifiestoAgent(fileBase64, mimeType, apiKey, db, opts 
   // 2. Respaldo Claude si Gemini no dio un resultado válido
   if (!parsed && anthropicKey) {
     console.log(`[MANIFIESTO] Gemini sin resultado (${fallos.gemini}), respaldo con Claude`);
-    const c = await llamarClaude(fileBase64, mimeType, anthropicKey, { deadline: limite });
+    const c = await llamarClaude(fileBase64, mimeType, anthropicKey, { deadline: limite, prompt });
     if (c.parsed) { parsed = c.parsed; proveedor = 'claude-sonnet-4-6'; }
     else { fallos.claude = c.error; raws.claude = c.raw; }
   }
@@ -395,6 +408,7 @@ export async function runManifiestoAgent(fileBase64, mimeType, apiKey, db, opts 
   return normalizarManifiesto(parsed, {
     proveedor,
     fallbackMotivo: proveedor === 'claude-sonnet-4-6' ? `gemini_${fallos.gemini}` : null,
-    hoy: fechaHoy
+    hoy: fechaHoy,
+    placas
   });
 }

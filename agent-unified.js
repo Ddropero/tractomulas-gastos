@@ -25,11 +25,30 @@ const VEHICULOS = {
 
 const CATEGORIAS = 'Combustible | Peajes | Llantas | Mantenimiento | Repuestos | Aceites y lubricantes | Lavado | Parqueadero | Seguro | Impuestos | Tecnomecánica | GPS / Tecnología | Viáticos conductor | Documentos | Multas | Báscula | Cargue / Descargue | Administración | Misceláneos';
 
-const SYSTEM = `Eres un procesador de documentos de gastos de una flota de tractomulas en Colombia (placas STT 115, STT 121, UPO 707).
+const PLACAS_DEFECTO = Object.keys(VEHICULOS);
+
+// "A, B o C" / "A o B" / "A"
+function listaO(items) {
+  if (items.length <= 1) return items.join('');
+  return items.slice(0, -1).join(', ') + ' o ' + items[items.length - 1];
+}
+
+// placas: lista de la flota (por defecto la fija de siempre). Con lista vacía no se nombra ninguna placa.
+export function construirSystem(placas = PLACAS_DEFECTO) {
+  const contexto = placas.length ? ` (placas ${placas.map(p => p.slice(0, 3) + ' ' + p.slice(3)).join(', ')})` : '';
+  return `Eres un procesador de documentos de gastos de una flota de tractomulas en Colombia${contexto}.
 Extrae TODO en UNA sola respuesta: valores fiscales, proveedor, clasificación y detección de vehículo.
 Responde ÚNICAMENTE con JSON válido, sin markdown.`;
+}
 
-const PROMPT = `Analiza este documento de gasto de transporte de carga colombiano y extrae todo:
+export function construirPrompt(placas = PLACAS_DEFECTO) {
+  const campoVehiculo = placas.length
+    ? `${placas.join(' | ')} | null (si aparece la placa en el documento)`
+    : 'placa leída sin espacios ni guiones (ej. ABC123) | null (si aparece la placa en el documento)';
+  const reglaVehiculo = placas.length
+    ? `busca la placa ${listaO(placas.map(p => p.slice(0, 3) + '-' + p.slice(3)))} en el documento. Si no aparece, null.`
+    : 'devuelve la placa del vehículo si aparece en el documento. Si no aparece, null.';
+  return `Analiza este documento de gasto de transporte de carga colombiano y extrae todo:
 
 {
   "fiscal": {
@@ -53,7 +72,7 @@ const PROMPT = `Analiza este documento de gasto de transporte de carga colombian
   "clasificacion": {
     "categoria": "una de: ${CATEGORIAS}",
     "concepto": "máx 80 chars ej: ACPM 80 gal - Terpel Villeta",
-    "vehiculo": "STT115 | STT121 | UPO707 | null (si aparece la placa en el documento)",
+    "vehiculo": "${campoVehiculo}",
     "ruta": "origen-destino si se identifica o null",
     "kilometraje": "número de km si aparece, o null"
   },
@@ -80,12 +99,13 @@ REGLAS:
 - Comida/hotel del conductor → Viáticos conductor
 - Manifiesto/planilla/permisos → Documentos
 - Pesaje → Báscula
-- VEHÍCULO: busca la placa STT-115, STT-121 o UPO-707 en el documento. Si no aparece, null.`;
+- VEHÍCULO: ${reglaVehiculo}`;
+}
 
-function detectarVehiculo(texto) {
+function detectarVehiculo(texto, placas = PLACAS_DEFECTO) {
   if (!texto) return null;
   const t = String(texto).toUpperCase().replace(/[\s\-]/g, '');
-  for (const [codigo, variantes] of Object.entries(VEHICULOS)) {
+  for (const codigo of placas) {
     if (t.includes(codigo)) return codigo;
   }
   return null;
@@ -98,8 +118,11 @@ const MIN_PRESUPUESTO_MS = 1500;
 const esTimeout = err => !!err && (err.name === 'TimeoutError' || err.name === 'AbortError');
 
 // opts (todo opcional): deadline → epoch ms hasta el que hay presupuesto de tiempo (cada fetch se recorta a lo que queda);
-// timeoutMs → tope por fetch (por defecto 25000)
+// timeoutMs → tope por fetch (por defecto 25000); placas → flota de la instancia (config-empresa.js): sin esta opción,
+// la lista y el comportamiento de siempre
 export async function runUnifiedAgent(fileBase64, mimeType, apiKey, db, opts = {}) {
+  const flotaConfigurada = Array.isArray(opts && opts.placas);
+  const placas = flotaConfigurada ? opts.placas : PLACAS_DEFECTO;
   const isDoc = mimeType === 'application/pdf';
 
   const { timeoutMs, deadline } = opts || {};
@@ -109,13 +132,13 @@ export async function runUnifiedAgent(fileBase64, mimeType, apiKey, db, opts = {
   const reqBody = JSON.stringify({
     model: 'claude-sonnet-4-6',
     max_tokens: 800,
-    system: SYSTEM,
+    system: construirSystem(placas),
     messages: [{
       role: 'user',
       content: [
         { type: isDoc ? 'document' : 'image',
           source: { type: 'base64', media_type: mimeType, data: fileBase64 } },
-        { type: 'text', text: PROMPT }
+        { type: 'text', text: construirPrompt(placas) }
       ]
     }]
   });
@@ -189,7 +212,11 @@ export async function runUnifiedAgent(fileBase64, mimeType, apiKey, db, opts = {
   const confianza = parsed.confianza || 'media';
 
   // Vehículo: el que detecte la IA, o fallback regex sobre concepto+ruta
-  const vehiculo = c.vehiculo || detectarVehiculo(`${c.concepto || ''} ${c.ruta || ''} ${f.numero_documento || ''}`);
+  // Con flota configurada solo cuenta una placa de la flota; sin ella, igual que siempre
+  const restoTexto = `${c.concepto || ''} ${c.ruta || ''} ${f.numero_documento || ''}`;
+  const vehiculo = flotaConfigurada
+    ? (detectarVehiculo(c.vehiculo, placas) || detectarVehiculo(restoTexto, placas))
+    : (c.vehiculo || detectarVehiculo(restoTexto));
 
   return {
     proveedor_nit: p.nit || null,

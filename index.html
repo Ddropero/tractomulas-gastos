@@ -171,7 +171,7 @@
 </header>
 
 <!-- Vehicle selector -->
-<div class="vehicle-bar">
+<div class="vehicle-bar" id="vehicle-bar">
   <button class="veh-btn" onclick="selectVehicle('STT115')" id="veh-STT115">
     <span class="veh-icon">🚛</span>
     <span class="veh-placa">STT 115</span>
@@ -186,7 +186,7 @@
   </button>
 </div>
 
-<div class="main">
+<div class="main" id="main">
   <div id="capture-area" style="display:none">
     <div class="capture-grid">
       <div class="capture-btn" onclick="tomarFoto()">
@@ -288,12 +288,94 @@
   </div>
 </div>
 
+<div id="sin-captura" class="no-vehicle" style="display:none;padding:48px 20px">La captura se hace por Telegram</div>
+
 <div class="toast" id="toast"><span id="toast-icon">✓</span><span id="toast-msg"></span></div>
 
 <script>
-const WORKER_URL = 'https://tractomulas-gastos.ddropero.workers.dev';
+// Producción se sirve desde Pages y dominios propios: usa la URL fija de su API.
+const API_PRODUCCION = 'https://tractomulas-gastos.ddropero.workers.dev';
+// Lista cerrada de hosts de producción (Pages y dominios propios de la instancia de producción).
+// Cualquier otro host habla SOLO con su propio origen: una instancia nueva nunca envía datos a la API de producción.
+// Un dominio nuevo de producción hay que agregarlo aquí.
+const HOSTS_PRODUCCION = ['flota.davidduque.com', 'tractomulas.davidduque.com'];
+const WORKER_URL = (location.protocol === 'file:' || HOSTS_PRODUCCION.includes(location.hostname) || location.hostname.endsWith('.pages.dev'))
+  ? API_PRODUCCION : location.origin;
+const ES_HOST_PRODUCCION = WORKER_URL === API_PRODUCCION;
 let vehiculo = null;
-let usuario = 'david';
+let usuario = ES_HOST_PRODUCCION ? 'david' : 'captura';
+let capturaActiva = ES_HOST_PRODUCCION; // en otra instancia, apagada hasta que la configuración diga lo contrario
+
+function tokenHeader() {
+  let t = null;
+  try { t = localStorage.getItem('session_token'); } catch {}
+  return t ? { 'Authorization': `Bearer ${t}` } : {};
+}
+
+async function cargarConfig() {
+  try {
+    // Con tope de espera: una petición colgada no puede dejar la página sin arrancar
+    const tope = (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) ? AbortSignal.timeout(6000) : undefined;
+    const r = await fetch(`${WORKER_URL}/api/config-publica`, { headers: tokenHeader(), signal: tope });
+    if (r.ok) return await r.json();
+  } catch {}
+  return null; // sin respuesta: se conserva lo que hoy está fijo
+}
+
+// Regenera los botones de placa y el select del preview desde la lista
+function aplicarVehiculos(lista) {
+  const vistos = new Set();
+  const vehs = (Array.isArray(lista) ? lista : [])
+    .map(v => ({ placa: String((v && v.placa) || '').toUpperCase().replace(/[^A-Z0-9]/g, ''), nombre: String((v && (v.nombre || v.placa)) || '') }))
+    .filter(v => v.placa && !vistos.has(v.placa) && vistos.add(v.placa));
+  const bar = document.getElementById('vehicle-bar');
+  bar.replaceChildren(...vehs.map(v => {
+    const b = document.createElement('button');
+    b.className = 'veh-btn' + (v.placa === vehiculo ? ' active' : '');
+    b.id = `veh-${v.placa}`;
+    b.onclick = () => selectVehicle(v.placa);
+    const icono = document.createElement('span'); icono.className = 'veh-icon'; icono.textContent = '🚛';
+    const placa = document.createElement('span'); placa.className = 'veh-placa'; placa.textContent = v.nombre;
+    b.append(icono, placa);
+    return b;
+  }));
+  const sel = document.getElementById('pv-vehiculo');
+  const actual = sel.value;   // la configuración puede llegar con el preview ya abierto: se conserva la placa elegida
+  sel.replaceChildren(...vehs.map(v => {
+    const o = document.createElement('option'); o.value = v.placa; o.textContent = v.nombre; return o;
+  }));
+  if (actual && vehs.some(v => v.placa === actual)) sel.value = actual;
+}
+
+function apagarCaptura() {
+  capturaActiva = false;
+  vehiculo = null;
+  document.getElementById('vehicle-bar').style.display = 'none';
+  document.getElementById('main').style.display = 'none';
+  document.getElementById('sin-captura').style.display = '';
+}
+
+// Los botones fijos del HTML son el respaldo de la instancia de producción
+if (!ES_HOST_PRODUCCION) apagarCaptura();
+
+(async () => {
+  const cfg = await cargarConfig();
+  if (!cfg) return; // producción: queda como está; otra instancia: queda apagada
+  const f = cfg.funciones || {};
+  if (f.captura_publica === false) { apagarCaptura(); return; }
+  if (cfg.entorno && cfg.entorno !== 'production') usuario = 'captura';
+  if (Array.isArray(cfg.vehiculos) && cfg.vehiculos.length > 0) {
+    aplicarVehiculos(cfg.vehiculos);
+  } else if (!ES_HOST_PRODUCCION) {
+    return; // sin placas no hay captura
+  }
+  if (!capturaActiva) {
+    capturaActiva = true;
+    document.getElementById('vehicle-bar').style.display = '';
+    document.getElementById('main').style.display = '';
+    document.getElementById('sin-captura').style.display = 'none';
+  }
+})();
 let previewQueue = [];
 let currentPreview = null;
 let sessionCount = 0;
@@ -301,7 +383,7 @@ let sessionCount = 0;
 const fmt = n => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(n);
 
 function tomarFoto() {
-  if (!vehiculo) return;
+  if (!vehiculo || !capturaActiva) return;
   document.getElementById('camera-input').click();
 }
 
@@ -322,7 +404,7 @@ function selectVehicle(v) {
 }
 
 async function handleFiles(files) {
-  if (!files.length || !vehiculo) return;
+  if (!files.length || !vehiculo || !capturaActiva) return;
   const fileList = Array.from(files);
   const area = document.getElementById('status-area');
   let duplicados = 0;
@@ -409,7 +491,7 @@ function showNext() {
 }
 
 async function confirmPreview() {
-  if (!currentPreview) return;
+  if (!currentPreview || !capturaActiva) return;
   const btn = document.getElementById('pv-confirm');
   btn.disabled = true;
   btn.textContent = 'Guardando...';

@@ -35,19 +35,21 @@ export async function runOcrAgent(fileBase64, mimeType, env, db, opts = {}) {
   const sonnetKey = env.ANTHROPIC_API_KEY;
   const geminiKey = env.GEMINI_API_KEY;
   const deadline = opts ? opts.deadline : undefined;
+  // Flota de la instancia (config-empresa.js). Sin opts.placas los agentes usan su lista fija de siempre
+  const flota = opts && Array.isArray(opts.placas) ? { placas: opts.placas } : {};
 
   // Si falta la key de Gemini, fallback automático a sonnet (zero-config safety)
   const effectiveProvider = (provider !== 'sonnet' && !geminiKey) ? 'sonnet' : provider;
 
   // ── Sonnet only ──
   if (effectiveProvider === 'sonnet') {
-    const result = await runUnifiedAgent(fileBase64, mimeType, sonnetKey, db, { deadline });
+    const result = await runUnifiedAgent(fileBase64, mimeType, sonnetKey, db, { deadline, ...flota });
     return { ...result, _ocr_provider: 'sonnet-4.6' };
   }
 
   // ── Gemini only ──
   if (effectiveProvider === 'gemini') {
-    const result = await runGeminiAgent(fileBase64, mimeType, geminiKey, db, { deadline });
+    const result = await runGeminiAgent(fileBase64, mimeType, geminiKey, db, { deadline, ...flota });
     return { ...result, _ocr_provider: 'gemini-2.5-flash' };
   }
 
@@ -62,7 +64,7 @@ export async function runOcrAgent(fileBase64, mimeType, env, db, opts = {}) {
     try {
       // Con respaldo Sonnet, Gemini falla rápido (sin reintentos y con tope corto); sin clave de Anthropic conserva los de siempre
       geminiResult = await runGeminiAgent(fileBase64, mimeType, geminiKey, db,
-        sonnetKey ? { reintentos: [], timeoutMs: GEMINI_CON_RESPALDO_MS, deadline } : { deadline });
+        sonnetKey ? { reintentos: [], timeoutMs: GEMINI_CON_RESPALDO_MS, deadline, ...flota } : { deadline, ...flota });
     } catch (err) {
       geminiResult = { error: 'gemini_threw: ' + err.message };
     }
@@ -81,7 +83,7 @@ export async function runOcrAgent(fileBase64, mimeType, env, db, opts = {}) {
     try { opts.alCaerASonnet(); } catch (err) { console.warn('[OCR] alCaerASonnet falló:', err && err.message); }
   }
   const t1 = Date.now();
-  const sonnetResult = await runUnifiedAgent(fileBase64, mimeType, sonnetKey, db, { deadline });
+  const sonnetResult = await runUnifiedAgent(fileBase64, mimeType, sonnetKey, db, { deadline, ...flota });
   const sonnetMs = Date.now() - t1;
 
   return {

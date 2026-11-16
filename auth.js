@@ -69,7 +69,7 @@ export async function verifyPassword(password, stored) {
   return constantTimeEqual(computed, stored);
 }
 
-function constantTimeEqual(a, b) {
+export function constantTimeEqual(a, b) {
   if (a.length !== b.length) return false;
   let result = 0;
   for (let i = 0; i < a.length; i++) {
@@ -186,10 +186,12 @@ export function generateSessionToken() {
   return bufToB64(bytes).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-export async function createSession(db, userId, tipo = 'full') {
+// ttlMs (opcional): duración distinta a la del tipo. Solo lo usa la inscripción, que da más tiempo a la sesión temporal
+// porque el dueño tiene que instalar la aplicación de códigos antes de escribir el primero.
+export async function createSession(db, userId, tipo = 'full', ttlMs = null) {
   const token = generateSessionToken();
   const tokenHash = await sha256Hex(token);
-  const ttl = tipo === 'temp' ? TEMP_TTL_MS : SESSION_TTL_MS;
+  const ttl = ttlMs > 0 ? ttlMs : (tipo === 'temp' ? TEMP_TTL_MS : SESSION_TTL_MS);
   const expiresAt = new Date(Date.now() + ttl).toISOString();
 
   await db.prepare(

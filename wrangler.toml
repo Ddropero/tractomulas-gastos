@@ -103,7 +103,7 @@ TERMINOS_VERSION = "piloto-v1"
 [[env.piloto.d1_databases]]
 binding = "DB"
 database_name = "flota-piloto"
-database_id = "REEMPLAZAR_ID_D1_PILOTO"
+database_id = "a93c17ff-342c-475e-ad3f-1ea2a9005474"
 
 [[env.piloto.r2_buckets]]
 binding = "BUCKET"

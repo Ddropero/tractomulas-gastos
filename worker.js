@@ -7,7 +7,7 @@
 import { runOcrAgent } from './agent-router.js';
 import { runManifiestoAgent } from './agent-manifiesto.js';
 import { generarReporteContadora } from './export-contadora.js';
-import { enviarFacturaCliente, correosValidos } from './factura-email.js';
+import { enviarFacturaCliente, correosValidos, ARCHIVO_ALIADDO_RE, esFirmadaAliaddo } from './factura-email.js';
 import { documentoSoporteManualAliaddo, listarDocumentosSoporteAliaddo, facturarViajeAliaddo, facturaManualAliaddo, datosFacturaAliaddo, probarEnvioEmailAliaddo, aliaddoDiagnostico, diagnosticoFacturacionAliaddo, listarClientesAliaddo, generarSoporteGasto, listarCuentasAliaddo, listarComprobantesAliaddo } from './aliaddo.js';
 import { checkRecurrentes } from './recurrentes.js';
 import { generateReport } from './report-pdf.js';
@@ -217,6 +217,8 @@ export default {
       'POST /api/inscripcion/validar',
       'POST /api/admin/invitaciones',
     ]);
+    // Prueba del lector sin guardar nada: solo fuera de producción y con x-admin-token (se valida en la ruta)
+    if (!esProduccion(env)) PUBLIC_ROUTES.add('POST /api/admin/probar-lector');
     // Con captura_publica apagada (FEATURES_OFF) la captura web exige sesión; sin la bandera, igual que siempre
     if (!funcionActiva(env, 'captura_publica')) {
       for (const r of ['POST /api/upload', 'POST /api/confirm', 'POST /api/manifiesto/upload', 'POST /api/viajes']) PUBLIC_ROUTES.delete(r);
@@ -229,6 +231,19 @@ export default {
     }
     const isPublic = PUBLIC_ROUTES.has(`${request.method} ${url.pathname}`)
       || url.pathname.startsWith('/api/soporte/');
+
+    if (request.method === 'POST' && url.pathname === '/api/admin/probar-lector') {
+      if (esProduccion(env) || !tokenAdminValido(request, env)) return json({ error: 'No encontrado' }, 404);
+      const mime = (request.headers.get('content-type') || '').split(';')[0].trim();
+      const buf = new Uint8Array(await request.arrayBuffer());
+      if (!buf.length || buf.length > 8 * 1024 * 1024) return json({ error: 'Archivo vacío o de más de 8 MB' }, 400);
+      let bin = '';
+      for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+      const t0 = Date.now();
+      const lectura = await runManifiestoAgent(btoa(bin), mime, env.GEMINI_API_KEY, env.DB,
+        { anthropicKey: env.ANTHROPIC_API_KEY, modeloClaude: env.CLAUDE_MODEL, ...(await opcionesPlacas(env)) });
+      return json({ ok: true, ms: Date.now() - t0, lectura });
+    }
 
     let authUser = null;
     if (!isPublic && url.pathname.startsWith('/api/')) {
@@ -781,7 +796,7 @@ export default {
         const r2Key     = `soportes/${Date.now()}-${file.name}`;
         const r2Promise = env.BUCKET.put(r2Key, buf, { httpMetadata: { contentType: mimeType } });
 
-        const preview = await runManifiestoAgent(b64, mimeType, env.GEMINI_API_KEY, env.DB, { anthropicKey: env.ANTHROPIC_API_KEY, ...(await opcionesPlacas(env)) });
+        const preview = await runManifiestoAgent(b64, mimeType, env.GEMINI_API_KEY, env.DB, { anthropicKey: env.ANTHROPIC_API_KEY, modeloClaude: env.CLAUDE_MODEL, ...(await opcionesPlacas(env)) });
 
         await r2Promise;
 
@@ -1356,7 +1371,7 @@ export default {
         const body = await request.json().catch(() => ({}));
         const facturas = Array.isArray(body.facturas) ? body.facturas.slice(0, 20) : [];
         if (!facturas.length) return json({ error: 'Sin facturas' }, 400);
-        const urlOk = (u) => /^https:\/\/storage\.googleapis\.com\/aliaddo-tenant-sales\/invoices\/\d+\/[\w.-]+\.(zip|pdf)$/.test(String(u || ''));
+        const urlOk = (u) => ARCHIVO_ALIADDO_RE.test(String(u || ''));
         const b64 = (buf) => {
           const bytes = new Uint8Array(buf); let s = '';
           for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
@@ -1368,7 +1383,7 @@ export default {
           if (!r.ok) return null;
           const t = await r.text();
           let s; try { s = JSON.parse(t); } catch { s = t.trim(); }
-          return typeof s === 'string' && s.startsWith('https://storage.googleapis.com/aliaddo-tenant-sales/') ? s : null;
+          return esFirmadaAliaddo(s) ? s : null;
         };
         const attachments = [], faltan = [];
         let total = 0;

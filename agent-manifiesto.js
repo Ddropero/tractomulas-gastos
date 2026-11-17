@@ -29,8 +29,8 @@ Analiza el documento y devuelve EXCLUSIVAMENTE un JSON con este schema EXACTO:
   "conductor": "nombre del conductor o null",
   "origen": "Origen Viaje o null",
   "destino": "Destino Viaje o null",
-  "empresa_carga": "titular del manifiesto / empresa que contrata el transporte, ej OPL CARGA SAS, o null",
-  "empresa_carga_nit": "NIT de la empresa de carga o null",
+  "empresa_carga": "razón social de la EMPRESA DE TRANSPORTE que expide el manifiesto (la del encabezado, junto a su NIT), ej OPL CARGA SAS, o null",
+  "empresa_carga_nit": "NIT de esa empresa de transporte (el del encabezado) o null",
   "remitente": "remitente de la mercancía o null",
   "destinatario": "destinatario de la mercancía o null",
   "mercancia": "descripción de la mercancía o null",
@@ -47,10 +47,12 @@ Analiza el documento y devuelve EXCLUSIVAMENTE un JSON con este schema EXACTO:
 
 REGLAS:
 - TODOS los montos NUMEROS sin separadores: 5800000 no "5.800.000"
-- valor_flete = VALOR TOTAL VIAJE
+- empresa_carga NO es el "Titular Manifiesto", ni el "Poseedor o Tenedor del Vehículo", ni el conductor: esos son el dueño del camión. Es la empresa cuyo nombre y NIT encabezan el documento
+- valor_flete = VALOR TOTAL VIAJE (si las cifras y el "valor en letras" no coinciden, vale el valor en letras)
 - retefuente = RETENCION EN LA FUENTE
 - reteica = RETENCION ICA
-- otras_retenciones = suma de cualquier otra retención distinta de fuente e ICA
+- otras_retenciones = suma de cualquier otra retención distinta de fuente e ICA (FOPAT, avisos y tableros, tasa bomberil). El FOPAT nunca va en reteica
+- Lee cada valor en el renglón de su propia etiqueta: no corras los valores un renglón cuando hay una línea de FOPAT
 - valor_neto = VALOR NETO A PAGAR
 - anticipo = VALOR ANTICIPO
 - saldo_a_cobrar = SALDO A PAGAR / VALOR A PAGAR
@@ -187,12 +189,21 @@ async function llamarGemini(fileBase64, mimeType, apiKey, { conRespaldo, deadlin
   }
 }
 
-// ── Claude Sonnet 4.6 (respaldo) ──────────────────────────
+// ── Claude (respaldo, o lector único si no hay clave de Gemini) ──────────────────────────
+export const MODELO_CLAUDE_DEFECTO = 'claude-sonnet-4-6';
+function cuerpoClaude(modelo, base) {
+  // El modelo de siempre conserva la petición de siempre. Los modelos nuevos razonan antes de responder
+  // (el razonamiento cuenta contra max_tokens): más margen, esfuerzo bajo y respaldo ante una negativa.
+  if (modelo === MODELO_CLAUDE_DEFECTO) return { headers: {}, body: { model: modelo, ...base } };
+  return {
+    headers: { 'anthropic-beta': 'server-side-fallback-2026-07-01' },
+    body: { model: modelo, ...base, max_tokens: 4000, output_config: { effort: 'low' }, fallbacks: 'default' },
+  };
+}
 // Devuelve { parsed } o { error, raw } (error sin el prefijo "manifiesto_")
-async function llamarClaude(fileBase64, mimeType, anthropicKey, { deadline, prompt }) {
+async function llamarClaude(fileBase64, mimeType, anthropicKey, { deadline, prompt, modelo = MODELO_CLAUDE_DEFECTO }) {
   const isDoc = mimeType === 'application/pdf';
-  const reqBody = JSON.stringify({
-    model: 'claude-sonnet-4-6',
+  const pet = cuerpoClaude(modelo, {
     max_tokens: 1200,
     messages: [{
       role: 'user',
@@ -203,6 +214,7 @@ async function llamarClaude(fileBase64, mimeType, anthropicKey, { deadline, prom
       ]
     }]
   });
+  const reqBody = JSON.stringify(pet.body);
 
   // Un solo reintento tras 1.5s ante errores transitorios (429, 500, 502, 503, 529) si queda presupuesto
   let res;
@@ -216,7 +228,8 @@ async function llamarClaude(fileBase64, mimeType, anthropicKey, { deadline, prom
         headers: {
           'Content-Type': 'application/json',
           'x-api-key': anthropicKey,
-          'anthropic-version': '2023-06-01'
+          'anthropic-version': '2023-06-01',
+          ...pet.headers
         },
         body: reqBody,
         signal: AbortSignal.timeout(Math.floor(Math.min(25000, restante)))
@@ -360,6 +373,7 @@ function normalizarManifiesto(parsed, { proveedor, fallbackMotivo, hoy, placas =
 //   placas       → flota de la instancia (config-empresa.js); sin esta opción, la lista fija de siempre
 export async function runManifiestoAgent(fileBase64, mimeType, apiKey, db, opts = {}) {
   const { anthropicKey, deadline, hoy, sinGemini } = opts || {};
+  const modeloClaude = (opts && opts.modeloClaude) || MODELO_CLAUDE_DEFECTO;
   const limite = Number.isFinite(deadline) ? deadline : null;
   const fechaHoy = fechaValida(hoy) ? hoy : fechaHoyColombia();
   const placas = Array.isArray(opts && opts.placas) ? opts.placas : VEHICULOS;
@@ -386,8 +400,8 @@ export async function runManifiestoAgent(fileBase64, mimeType, apiKey, db, opts 
   // 2. Respaldo Claude si Gemini no dio un resultado válido
   if (!parsed && anthropicKey) {
     console.log(`[MANIFIESTO] Gemini sin resultado (${fallos.gemini}), respaldo con Claude`);
-    const c = await llamarClaude(fileBase64, mimeType, anthropicKey, { deadline: limite, prompt });
-    if (c.parsed) { parsed = c.parsed; proveedor = 'claude-sonnet-4-6'; }
+    const c = await llamarClaude(fileBase64, mimeType, anthropicKey, { deadline: limite, prompt, modelo: modeloClaude });
+    if (c.parsed) { parsed = c.parsed; proveedor = modeloClaude; }
     else { fallos.claude = c.error; raws.claude = c.raw; }
   }
 
@@ -407,7 +421,7 @@ export async function runManifiestoAgent(fileBase64, mimeType, apiKey, db, opts 
 
   return normalizarManifiesto(parsed, {
     proveedor,
-    fallbackMotivo: proveedor === 'claude-sonnet-4-6' ? `gemini_${fallos.gemini}` : null,
+    fallbackMotivo: proveedor === modeloClaude ? `gemini_${fallos.gemini}` : null,
     hoy: fechaHoy,
     placas
   });

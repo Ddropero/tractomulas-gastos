@@ -799,7 +799,7 @@ export async function procesarDocumento(env, doc) {
     // falló, la extracción arranca EN PARALELO (directo a Claude: Gemini acaba de fallar con esta foto). Si el documento no resulta
     // ser un manifiesto ese resultado se descarta (cuesta una llamada de más, solo mientras Gemini está caído)
     const extraerManifiesto = (extra = {}) =>
-      runManifiestoAgent(b64, mime, env.GEMINI_API_KEY, env.DB, { anthropicKey: env.ANTHROPIC_API_KEY, deadline, ...optsPlacas, ...extra });
+      runManifiestoAgent(b64, mime, env.GEMINI_API_KEY, env.DB, { anthropicKey: env.ANTHROPIC_API_KEY, modeloClaude: env.CLAUDE_MODEL, deadline, ...optsPlacas, ...extra });
     let manAdelantado = null;
     const alCaerASonnet = () => {
       if (!env.ANTHROPIC_API_KEY || manAdelantado) return;

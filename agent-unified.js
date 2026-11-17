@@ -120,6 +120,17 @@ const esTimeout = err => !!err && (err.name === 'TimeoutError' || err.name === '
 // opts (todo opcional): deadline → epoch ms hasta el que hay presupuesto de tiempo (cada fetch se recorta a lo que queda);
 // timeoutMs → tope por fetch (por defecto 25000); placas → flota de la instancia (config-empresa.js): sin esta opción,
 // la lista y el comportamiento de siempre
+const MODELO_CLAUDE_DEFECTO = 'claude-sonnet-4-6';
+function cuerpoClaude(modelo, base) {
+  // El modelo de siempre conserva la petición de siempre. Los modelos nuevos razonan antes de responder
+  // (el razonamiento cuenta contra max_tokens): más margen, esfuerzo bajo y respaldo ante una negativa.
+  if (modelo === MODELO_CLAUDE_DEFECTO) return { headers: {}, body: { model: modelo, ...base } };
+  return {
+    headers: { 'anthropic-beta': 'server-side-fallback-2026-07-01' },
+    body: { model: modelo, ...base, max_tokens: 4000, output_config: { effort: 'low' }, fallbacks: 'default' },
+  };
+}
+
 export async function runUnifiedAgent(fileBase64, mimeType, apiKey, db, opts = {}) {
   const flotaConfigurada = Array.isArray(opts && opts.placas);
   const placas = flotaConfigurada ? opts.placas : PLACAS_DEFECTO;
@@ -129,8 +140,7 @@ export async function runUnifiedAgent(fileBase64, mimeType, apiKey, db, opts = {
   const tope = timeoutMs > 0 ? timeoutMs : 25000;
   const limite = Number.isFinite(deadline) ? deadline : null;
 
-  const reqBody = JSON.stringify({
-    model: 'claude-sonnet-4-6',
+  const pet = cuerpoClaude((opts && opts.modeloClaude) || MODELO_CLAUDE_DEFECTO, {
     max_tokens: 800,
     system: construirSystem(placas),
     messages: [{
@@ -142,6 +152,7 @@ export async function runUnifiedAgent(fileBase64, mimeType, apiKey, db, opts = {
       ]
     }]
   });
+  const reqBody = JSON.stringify(pet.body);
 
   // Un solo reintento tras 1.5s ante errores transitorios de Anthropic (429, 500, 502, 503, 529) si queda presupuesto
   let res;
@@ -155,7 +166,8 @@ export async function runUnifiedAgent(fileBase64, mimeType, apiKey, db, opts = {
         headers: {
           'Content-Type': 'application/json',
           'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01'
+          'anthropic-version': '2023-06-01',
+          ...pet.headers
         },
         body: reqBody,
         signal: AbortSignal.timeout(Math.floor(Math.min(tope, restante)))

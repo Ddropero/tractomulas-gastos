@@ -7,8 +7,12 @@
 // temporal (sin login) en attachments/signUrl — la misma que usa "Exportar ZIP" en la web.
 // ============================================================
 
-const ZIP_RE = /^https:\/\/storage\.googleapis\.com\/aliaddo-tenant-sales\/invoices\/\d+\/[\w.-]+\.zip$/;
-const FIRMADA_PREFIX = 'https://storage.googleapis.com/aliaddo-tenant-sales/';
+// Aliaddo guarda los archivos en dos sitios: el de siempre (aliaddo-tenant-sales/invoices/N/) y, desde nov-2026,
+// alddbox/N/transactions/ (facturas 518 en adelante). Se aceptan solo esas dos rutas.
+const ZIP_RE = /^https:\/\/storage\.googleapis\.com\/(aliaddo-tenant-sales\/invoices\/\d+|alddbox\/\d+\/transactions)\/[\w.-]+\.zip$/;
+export const ARCHIVO_ALIADDO_RE = /^https:\/\/storage\.googleapis\.com\/(aliaddo-tenant-sales\/invoices\/\d+|alddbox\/\d+\/transactions)\/[\w.-]+\.(zip|pdf)$/;
+const FIRMADA_PREFIXES = ['https://storage.googleapis.com/aliaddo-tenant-sales/', 'https://storage.googleapis.com/alddbox/'];
+export const esFirmadaAliaddo = (s) => typeof s === 'string' && FIRMADA_PREFIXES.some(p => s.startsWith(p));
 const MAX_ZIP = 2 * 1024 * 1024; // límite DIAN para el adjunto
 
 // URL del ZIP oficial: la que dé Aliaddo o, si solo hay la del PDF (firmada), la misma ruta con .zip
@@ -26,7 +30,7 @@ export async function urlFirmadaAliaddo(u, fetchFn = fetch) {
   if (!r.ok) return null;
   const t = await r.text();
   let s; try { s = JSON.parse(t); } catch { s = t.trim(); }
-  return typeof s === 'string' && s.startsWith(FIRMADA_PREFIX) ? s : null;
+  return esFirmadaAliaddo(s) ? s : null;
 }
 
 const sinPuntoYComa = (s) => String(s == null ? '' : s).replace(/[;\r\n]+/g, ' ').trim();

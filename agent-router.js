@@ -36,7 +36,8 @@ export async function runOcrAgent(fileBase64, mimeType, env, db, opts = {}) {
   const geminiKey = env.GEMINI_API_KEY;
   const deadline = opts ? opts.deadline : undefined;
   // Flota de la instancia (config-empresa.js). Sin opts.placas los agentes usan su lista fija de siempre
-  const flota = opts && Array.isArray(opts.placas) ? { placas: opts.placas } : {};
+  const flota = { ...(opts && Array.isArray(opts.placas) ? { placas: opts.placas } : {}),
+    ...(env.CLAUDE_MODEL ? { modeloClaude: env.CLAUDE_MODEL } : {}) };
 
   // Si falta la key de Gemini, fallback automático a sonnet (zero-config safety)
   const effectiveProvider = (provider !== 'sonnet' && !geminiKey) ? 'sonnet' : provider;
@@ -44,7 +45,7 @@ export async function runOcrAgent(fileBase64, mimeType, env, db, opts = {}) {
   // ── Sonnet only ──
   if (effectiveProvider === 'sonnet') {
     const result = await runUnifiedAgent(fileBase64, mimeType, sonnetKey, db, { deadline, ...flota });
-    return { ...result, _ocr_provider: 'sonnet-4.6' };
+    return { ...result, _ocr_provider: env.CLAUDE_MODEL || 'sonnet-4.6' };
   }
 
   // ── Gemini only ──
